@@ -186,4 +186,9 @@ public class UserStatsRow {
 		return merged;
 	}
 
+	@Override
+	public Object clone() throws CloneNotSupportedException {
+		return super.clone();
+	}
+
 }
