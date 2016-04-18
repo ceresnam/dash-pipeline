@@ -286,12 +286,11 @@ public class DashPipeline {
 	    			})
     			.withOutputType(new TypeDescriptor<UserStatsRow>() {}));
 	    PCollection<UserStatsRow> urowsIn = PCollectionList.of(urowsData).and(urowsProp)
-		    .apply("OrMerge", new OrMergeFn())
+		    .apply("MergeProps", new OrMergeFn())
 		    // make day from UserStats row as timestamp when the event occurred
 		    .apply("SetEventTimestamps", WithTimestamps.of((UserStatsRow r) ->
 	    		r.day.toDateTimeAtStartOfDay(DateTimeZone.UTC).toInstant()
 	    	));
-	    //PCollection<UserStatsRow> urowsIn = urowsData;
 
 	    PCollection<UserStatsRow> urows1 = urowsIn
 	    	.apply("IsActive1d", Filter.byPredicate((UserStatsRow urow) ->

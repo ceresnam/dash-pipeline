@@ -18,7 +18,7 @@ import com.google.cloud.dataflow.sdk.coders.DefaultCoder;
 import com.modrykonik.dash.io.LocalDateEncoding;
 
 @DefaultCoder(AvroCoder.class)
-public class UserStatsRow {
+public class UserStatsRow implements Cloneable {
 
 	@AvroEncode(using=LocalDateEncoding.class)
 	public LocalDate day;
