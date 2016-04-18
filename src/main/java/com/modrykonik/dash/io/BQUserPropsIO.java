@@ -1,5 +1,8 @@
 package com.modrykonik.dash.io;
 
+import org.joda.time.DateTimeZone;
+import org.joda.time.LocalDate;
+
 import com.google.api.services.bigquery.model.TableRow;
 import com.google.cloud.dataflow.sdk.Pipeline;
 import com.google.cloud.dataflow.sdk.io.BigQueryIO;
@@ -24,21 +27,46 @@ public class BQUserPropsIO {
 		extends PTransform<PInput, PCollection<UserProperties>>
 	{
 		private final String inTable;
+		private final LocalDate dfrom;
+		private final LocalDate dto;
 
-		public Read(String bqTable) {
+		public Read(String bqTable, LocalDate dfrom, LocalDate dto) {
 			this.inTable = bqTable;
+			this.dfrom = dfrom;
+			this.dto = dto;
 		}
 
 		public static Read from(int serverId) {
-			return new Read(tableName(serverId));
+			return new Read(tableName(serverId, true), null, null);
+		}
+
+		public static Read from(int serverId, LocalDate dfrom, LocalDate dto) {
+			return new Read(tableName(serverId, false), dfrom, dto);
 		}
 
 	    @Override
 	    public PCollection<UserProperties> apply(PInput input) {
 	    	Pipeline pipe = input.getPipeline();
 
-	    	return pipe
-	    		.apply("BQRead", BigQueryIO.Read.from(inTable))
+	    	PCollection<TableRow> rows;
+	    	if (dfrom!=null || dto!=null) {
+	    		String cond1 = dfrom!=null ? String.format(
+    				"registered_on >= '%s'",
+    				dfrom.toDateTimeAtStartOfDay(DateTimeZone.UTC).toString()
+    			) : "";
+	    		String cond2 = dto!=null ? String.format(
+	    			"registered_on < '%s'",
+	    			dto.plusDays(1).toDateTimeAtStartOfDay(DateTimeZone.UTC).toString()
+	    		) : "";
+	    		String q = String.format("select * from %s where %s and %s", inTable, cond1, cond2);
+	    		rows = pipe
+				    .apply("BQRead", BigQueryIO.Read.fromQuery(q));
+	    	} else {
+	    		rows = pipe
+				    .apply("BQRead", BigQueryIO.Read.from(inTable));
+	    	}
+
+	    	return rows
 	    		.apply("Parse", MapElements
         			.via((TableRow row) -> UserProperties.from(row))
         			.withOutputType(new TypeDescriptor<UserProperties>() {}));
@@ -58,7 +86,7 @@ public class BQUserPropsIO {
 		}
 
 		public static Write to(int serverId) {
-			return new Write(tableName(serverId));
+			return new Write(tableName(serverId, true));
 		}
 
 		@Override
@@ -75,7 +103,10 @@ public class BQUserPropsIO {
 		}
     }
 
-	private static String tableName(int serverId) {
-		return String.format("%s:user_stats_%d.ds_user_props", DashPipeline.PROJECT_ID, serverId);
+	private static String tableName(int serverId, boolean withProject) {
+		String t = String.format("user_stats_%d.ds_user_props", serverId);
+		if (withProject) t = DashPipeline.PROJECT_ID + ':' + t;
+		return t;
 	}
+
 }
