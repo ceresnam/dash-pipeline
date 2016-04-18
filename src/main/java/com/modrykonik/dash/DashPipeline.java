@@ -8,7 +8,6 @@ import org.joda.time.format.DateTimeFormatterBuilder;
 
 import com.google.api.services.bigquery.model.TableRow;
 import com.google.cloud.dataflow.sdk.Pipeline;
-import com.google.cloud.dataflow.sdk.options.PipelineOptions;
 import com.google.cloud.dataflow.sdk.options.PipelineOptionsFactory;
 import com.google.cloud.dataflow.sdk.transforms.DoFn;
 import com.google.cloud.dataflow.sdk.transforms.Filter;
@@ -253,17 +252,15 @@ public class DashPipeline {
 		return camelCaseString;
 	}
 
-	public interface CmdlineOptions extends PipelineOptions {
-	}
-
 	public static void main(String[] args) {
-		PipelineOptionsFactory.register(CmdlineOptions.class);
-		CmdlineOptions options = PipelineOptionsFactory.fromArgs(args).withValidation().as(CmdlineOptions.class);
+		PipelineOptionsFactory.register(DashPipelineOptions.class);
+		DashPipelineOptions options = PipelineOptionsFactory.
+			fromArgs(args).withValidation().as(DashPipelineOptions.class);
 	    Pipeline pipe = Pipeline.create(options);
 
-	    int serverId = 202;
-	    LocalDate dfrom = LocalDate.parse("2010-01-11");
-	    LocalDate dto = LocalDate.parse("2010-01-15");
+	    int serverId = options.getServerid();
+	    LocalDate dfrom = LocalDate.parse(options.getDfrom());
+	    LocalDate dto = LocalDate.parse(options.getDto());
 	    assert dto.isAfter(dfrom) || dto.isEqual(dfrom);
 
 	    // load from big query and compute simple features
