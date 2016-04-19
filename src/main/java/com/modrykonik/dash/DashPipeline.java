@@ -25,24 +25,16 @@ import com.modrykonik.dash.transforms.OrMergeFn;
 import com.modrykonik.dash.transforms.RollingBooleanFeatureFn;
 
 /**
- * A starter example for writing Google Cloud Dataflow programs.
+ * Goole Cloud Dataflow pipeline for computing dash features
  *
- * <p>
- * The example takes two strings, converts them to their upper-case
- * representation and logs them.
+ * build with:
+ *     mvn clean compile assembly:single
  *
- * <p>
- * To run this starter example locally using DirectPipelineRunner, just execute
- * it without any additional parameters from your favorite development
- * environment. In Eclipse, this corresponds to the existing 'LOCAL' run
- * configuration.
- *
- * <p>
- * To run this starter example using managed resource in Google Cloud Platform,
- * you should specify the following command-line options: --project=
- * <YOUR_PROJECT_ID> --stagingLocation=
- * <STAGING_LOCATION_IN_CLOUD_STORAGE> --runner=BlockingDataflowPipelineRunner
- * In Eclipse, you can just modify the existing 'SERVICE' run configuration.
+ * run in cloud with:
+ *     java -jar ./target/dash-pipeline-0.0.1-SNAPSHOT-jar-with-dependencies.jar
+ *         --serverid=202 --dfrom='2010-01-01' --dto='2010-12-31'
+ *         --project='maximal-beach-125109' --stagingLocation='gs://dash_import'
+ *         --runner=DataflowPipelineRunner --autoscalingAlgorithm=THROUGHPUT_BASED --maxNumWorkers=5
  */
 @SuppressWarnings("serial")
 public class DashPipeline {
