@@ -267,7 +267,12 @@ public class DashPipeline {
 	    LocalDate dfromPreload = dfrom.minusDays(90-1);  // need to read back in history for rollup features
 	    PCollection<UserStatsRow> urowsData = pipe
     		.apply("BQRead", BQUserStatsIO.Read.from(serverId, dfromPreload, dto))
-	    	.apply("BQImportAndCompute", ParDo.of(new ImportFromBQAndComputeFeaturesFn()));
+	    	.apply("BQImportAndCompute", ParDo.of(new ImportFromBQAndComputeFeaturesFn()))
+		    // make day from UserStats row as timestamp when the event occurred
+		    .apply("SetEventTimestamps", WithTimestamps.of((UserStatsRow r) ->
+	    		r.day.toDateTimeAtStartOfDay(DateTimeZone.UTC).toInstant()
+	    	));
+
 	    PCollection<UserStatsRow> urowsProp = pipe
 	    	.apply("ReadUserProps", BQUserPropsIO.Read.from(serverId, dfromPreload, dto))
 	    	.apply("FilterRegistered", Filter.byPredicate((UserProperties uprop) -> {
@@ -284,15 +289,13 @@ public class DashPipeline {
 	    				urow.is_register = true;
 	    				return urow;
 	    			})
-    			.withOutputType(new TypeDescriptor<UserStatsRow>() {}));
-	    PCollection<UserStatsRow> urowsIn = PCollectionList.of(urowsData).and(urowsProp)
-		    .apply("MergeProps", new OrMergeFn())
+    			.withOutputType(new TypeDescriptor<UserStatsRow>() {}))
 		    // make day from UserStats row as timestamp when the event occurred
-		    .apply("SetEventTimestamps", WithTimestamps.of((UserStatsRow r) ->
+		    .apply("SetEventTimestampsProps", WithTimestamps.of((UserStatsRow r) ->
 	    		r.day.toDateTimeAtStartOfDay(DateTimeZone.UTC).toInstant()
 	    	));
 
-	    PCollection<UserStatsRow> urows1 = urowsIn
+	    PCollection<UserStatsRow> urows1 = urowsData
 	    	.apply("IsActive1d", Filter.byPredicate((UserStatsRow urow) ->
 	    		(urow.day.isAfter(dfrom) || urow.day.isEqual(dfrom)) &&
 	    		(urow.day.isBefore(dto) || urow.day.isEqual(dto))
@@ -301,14 +304,14 @@ public class DashPipeline {
 	    // compute rolling features
 	    PCollectionList<UserStatsRow> urowsList = PCollectionList.of(urows1);
 	    String[] rolling_7_28_90 = new String[] {
-	    	"is_active", "is_alive", "is_register"
+	    	"is_active", "is_alive"
 	    };
 	    for (String f: rolling_7_28_90) {
-	    	PCollection<UserStatsRow> furows7d = urowsIn
+	    	PCollection<UserStatsRow> furows7d = urowsData
 				 .apply(toCamelCase(f+"7d"), new RollingBooleanFeatureFn(f, f+"7d", 7, dfrom, dto));
-	    	PCollection<UserStatsRow> furows28d = urowsIn
+	    	PCollection<UserStatsRow> furows28d = urowsData
 			    .apply(toCamelCase(f+"28d"), new RollingBooleanFeatureFn(f, f+"28d", 28, dfrom, dto));
-	    	PCollection<UserStatsRow> furows90d = urowsIn
+	    	PCollection<UserStatsRow> furows90d = urowsData
 				 .apply(toCamelCase(f+"90d"), new RollingBooleanFeatureFn(f, f+"90d", 90, dfrom, dto));
 	    	urowsList = urowsList.and(furows7d).and(furows28d).and(furows90d);
 	    }
@@ -317,10 +320,22 @@ public class DashPipeline {
     		"is_bazar_alive", "is_forum_alive", "is_group_alive", "is_photoblog_alive",
 	    };
 	    for (String f: rolling_28) {
-	    	PCollection<UserStatsRow> furows7d = urowsIn
+	    	PCollection<UserStatsRow> furows7d = urowsData
 			    .apply(toCamelCase(f+"28d"), new RollingBooleanFeatureFn(f, f+"28d", 28, dfrom, dto));
 	    	urowsList = urowsList.and(furows7d);
 	    }
+	    String[] rollingProp_7_28_90 = new String[] {
+		    	"is_register"
+		    };
+		    for (String f: rollingProp_7_28_90) {
+		    	PCollection<UserStatsRow> furows7d = urowsProp
+					 .apply(toCamelCase(f+"7d"), new RollingBooleanFeatureFn(f, f+"7d", 7, dfrom, dto));
+		    	PCollection<UserStatsRow> furows28d = urowsProp
+				    .apply(toCamelCase(f+"28d"), new RollingBooleanFeatureFn(f, f+"28d", 28, dfrom, dto));
+		    	PCollection<UserStatsRow> furows90d = urowsProp
+					 .apply(toCamelCase(f+"90d"), new RollingBooleanFeatureFn(f, f+"90d", 90, dfrom, dto));
+		    	urowsList = urowsList.and(furows7d).and(furows28d).and(furows90d);
+		    }
 
 	    // merge all features into one urow per [day, auth_user_id]
 	    PCollection<UserStatsRow> urowsMerged = urowsList
