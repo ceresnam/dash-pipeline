@@ -188,51 +188,6 @@ public class DashPipeline {
 		}
 	}
 
-	/**
-	 * Compute features that depend on already computed rolling features computed
-	 */
-	static class ComputeDepFeaturesFn extends DoFn<UserStatsRow, UserStatsRow> {
-
-		@Override
-		public void processElement(ProcessContext c)
-			throws Exception
-		{
-			UserStatsRow urow = (UserStatsRow) c.element().clone();
-
-			urow.has_pregnancystate_pregnant_active28d =
-				urow.has_pregnancystate_pregnant || urow.is_active28d;
-			urow.has_pregnancystate_trying_active28d =
-				urow.has_pregnancystate_trying || urow.is_active28d;
-			urow.has_profile_avatar_active28d =
-				urow.has_profile_avatar || urow.is_active28d;
-			urow.has_profile_birthdate_active28d =
-				urow.has_profile_birthdate || urow.is_active28d;
-			urow.has_profile_child_active28d =
-				urow.has_profile_child || urow.is_active28d;
-			urow.has_profile_city_active28d =
-				urow.has_profile_city || urow.is_active28d;
-			urow.has_profile_county_active28d =
-				urow.has_profile_county || urow.is_active28d;
-
-			urow.has_pregnancystate_pregnant_alive28d =
-					urow.has_pregnancystate_pregnant || urow.is_alive28d;
-			urow.has_pregnancystate_trying_alive28d =
-				urow.has_pregnancystate_trying || urow.is_alive28d;
-			urow.has_profile_avatar_alive28d =
-				urow.has_profile_avatar || urow.is_alive28d;
-			urow.has_profile_birthdate_alive28d =
-				urow.has_profile_birthdate || urow.is_alive28d;
-			urow.has_profile_child_alive28d =
-				urow.has_profile_child || urow.is_alive28d;
-			urow.has_profile_city_alive28d =
-				urow.has_profile_city || urow.is_alive28d;
-			urow.has_profile_county_alive28d =
-				urow.has_profile_county || urow.is_alive28d;
-
-			c.output(urow);
-		}
-	}
-
 	static String toCamelCase(String s){
 	    String camelCaseString = "";
 
@@ -332,10 +287,6 @@ public class DashPipeline {
 	    // merge all features into one urow per [day, auth_user_id]
 	    PCollection<UserStatsRow> urowsMerged = urowsList
 	    	.apply("OrMerge", new OrMergeFn());
-
-	    //compute features that depend on rolling features computed before
-	    urowsMerged = urowsMerged
-	    	.apply("ComputeDep", ParDo.of(new ComputeDepFeaturesFn()));
 	    //PCollection<UserStatsRow> urowsMerged = urows1;
 
 	    // write to big query
