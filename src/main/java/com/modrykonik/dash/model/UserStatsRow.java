@@ -141,7 +141,12 @@ public class UserStatsRow implements Cloneable {
 		TableRow data = new TableRow();
 		for (String fieldName: getComputedColumns()) {
 			try {
-				data.set(fieldName, this.getClass().getDeclaredField(fieldName).get(this));
+				Field f = UserStatsRow.class.getDeclaredField(fieldName);
+				Boolean val = f.getBoolean(this);
+				if (val!=null && val.booleanValue()) {
+					//dash aggregation queries assume null instead of FALSE value
+					data.set(fieldName, val);
+				}
 			} catch (IllegalAccessException|NoSuchFieldException e) {
 				throw new RuntimeException(e);
 			}
