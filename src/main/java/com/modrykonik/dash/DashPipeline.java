@@ -178,13 +178,6 @@ public class DashPipeline {
 			urow.is_photoblog_alive = oneOf(data, "num_minutes_on_site_photoblog") || urow.is_photoblog_active;
 
 			urow.has_registered = parseBoolean(row, "has_registered");
-			urow.has_pregnancystate_pregnant = parseBoolean(row, "has_pregnancystate_pregnant");
-			urow.has_pregnancystate_trying = parseBoolean(row, "has_pregnancystate_trying");
-			urow.has_profile_avatar = parseBoolean(row, "has_profile_avatar");
-			urow.has_profile_birthdate = parseBoolean(row, "has_profile_birthdate");
-			urow.has_profile_child = parseBoolean(row, "has_profile_child");
-			urow.has_profile_city = parseBoolean(row, "has_profile_city");
-			urow.has_profile_county = parseBoolean(row, "has_profile_county");
 
 			c.output(urow);
 		}

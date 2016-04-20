@@ -28,13 +28,6 @@ public class UserStatsRow implements Cloneable {
 	 *  Columns cached from big query table row
 	 */
 	@Nullable public boolean has_registered;
-	@Nullable public boolean has_pregnancystate_pregnant;
-	@Nullable public boolean has_pregnancystate_trying;
-	@Nullable public boolean has_profile_avatar;
-	@Nullable public boolean has_profile_birthdate;
-	@Nullable public boolean has_profile_child;
-	@Nullable public boolean has_profile_city;
-	@Nullable public boolean has_profile_county;
 
 	/*
 	 *  Columns computed with dataflow
@@ -75,21 +68,6 @@ public class UserStatsRow implements Cloneable {
 	@Nullable public boolean is_group_alive28d;
 	@Nullable public boolean is_photoblog_alive28d;
 
-	@Nullable public boolean has_pregnancystate_pregnant_active28d;
-	@Nullable public boolean has_pregnancystate_trying_active28d;
-	@Nullable public boolean has_profile_avatar_active28d;
-	@Nullable public boolean has_profile_birthdate_active28d;
-	@Nullable public boolean has_profile_child_active28d;
-	@Nullable public boolean has_profile_city_active28d;
-	@Nullable public boolean has_profile_county_active28d;
-
-	@Nullable public boolean has_pregnancystate_pregnant_alive28d;
-	@Nullable public boolean has_pregnancystate_trying_alive28d;
-	@Nullable public boolean has_profile_avatar_alive28d;
-	@Nullable public boolean has_profile_birthdate_alive28d;
-	@Nullable public boolean has_profile_child_alive28d;
-	@Nullable public boolean has_profile_city_alive28d;
-	@Nullable public boolean has_profile_county_alive28d;
 
 	public UserStatsRow() {}
 
