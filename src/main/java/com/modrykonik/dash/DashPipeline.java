@@ -1,13 +1,16 @@
 package com.modrykonik.dash;
 
+import org.joda.time.DateTimeUtils;
 import org.joda.time.DateTimeZone;
 import org.joda.time.Instant;
 import org.joda.time.LocalDate;
+import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
 import org.joda.time.format.DateTimeFormatterBuilder;
 
 import com.google.api.services.bigquery.model.TableRow;
 import com.google.cloud.dataflow.sdk.Pipeline;
+import com.google.cloud.dataflow.sdk.options.DataflowPipelineOptions;
 import com.google.cloud.dataflow.sdk.options.PipelineOptionsFactory;
 import com.google.cloud.dataflow.sdk.transforms.DoFn;
 import com.google.cloud.dataflow.sdk.transforms.Filter;
@@ -202,12 +205,24 @@ public class DashPipeline {
 		PipelineOptionsFactory.register(DashPipelineOptions.class);
 		DashPipelineOptions options = PipelineOptionsFactory.
 			fromArgs(args).withValidation().as(DashPipelineOptions.class);
-	    Pipeline pipe = Pipeline.create(options);
 
 	    int serverId = options.getServerid();
 	    LocalDate dfrom = LocalDate.parse(options.getDfrom());
 	    LocalDate dto = LocalDate.parse(options.getDto());
 	    assert dto.isAfter(dfrom) || dto.isEqual(dfrom);
+
+	    DataflowPipelineOptions dfoptions = options.as(DataflowPipelineOptions.class);
+	    String jobName = String.format("%s-%d-%s-%s-%s",
+    		dfoptions.getAppName().toLowerCase(),
+    		serverId,
+    		dfrom.toString("yyyyMMdd"),
+    		dto.toString("yyyyMMdd"),
+    		// keep the same timestamp format as original value
+    		DateTimeFormat.forPattern("MMddHHmmss").withZone(DateTimeZone.UTC).print(DateTimeUtils.currentTimeMillis())
+	    );
+	    dfoptions.setJobName(jobName);
+
+	    Pipeline pipe = Pipeline.create(options);
 
 	    // load from big query and compute simple features
 	    LocalDate dfromPreload = dfrom.minusDays(90-1);  // need to read back in history for rollup features
