@@ -11,15 +11,11 @@ import com.google.cloud.dataflow.sdk.Pipeline;
 import com.google.cloud.dataflow.sdk.options.PipelineOptionsFactory;
 import com.google.cloud.dataflow.sdk.transforms.DoFn;
 import com.google.cloud.dataflow.sdk.transforms.Filter;
-import com.google.cloud.dataflow.sdk.transforms.MapElements;
 import com.google.cloud.dataflow.sdk.transforms.ParDo;
 import com.google.cloud.dataflow.sdk.transforms.WithTimestamps;
 import com.google.cloud.dataflow.sdk.values.PCollection;
 import com.google.cloud.dataflow.sdk.values.PCollectionList;
-import com.google.cloud.dataflow.sdk.values.TypeDescriptor;
-import com.modrykonik.dash.io.BQUserPropsIO;
 import com.modrykonik.dash.io.BQUserStatsIO;
-import com.modrykonik.dash.model.UserProperties;
 import com.modrykonik.dash.model.UserStatsRow;
 import com.modrykonik.dash.transforms.OrMergeFn;
 import com.modrykonik.dash.transforms.RollingBooleanFeatureFn;
@@ -28,13 +24,15 @@ import com.modrykonik.dash.transforms.RollingBooleanFeatureFn;
  * Goole Cloud Dataflow pipeline for computing dash features
  *
  * build with:
+ * 	   export JAVA_HOME=$(/usr/libexec/java_home -v 1.8)
+ * 	   export PATH=$PATH:~/Downloads/apache-maven-3.3.9/bin
  *     mvn clean compile assembly:single
  *
  * run in cloud with:
  *     java -jar ./target/dash-pipeline-0.0.1-SNAPSHOT-jar-with-dependencies.jar
- *         --serverid=202 --dfrom='2010-01-01' --dto='2010-12-31'
  *         --project='maximal-beach-125109' --stagingLocation='gs://dash_import'
  *         --runner=DataflowPipelineRunner --autoscalingAlgorithm=THROUGHPUT_BASED --maxNumWorkers=5
+ *         --serverid=202 --dfrom='2010-01-01' --dto='2010-12-31'
  */
 @SuppressWarnings("serial")
 public class DashPipeline {
@@ -176,6 +174,7 @@ public class DashPipeline {
 			urow.is_group_alive = oneOf(data, "num_minutes_on_site_group") || urow.is_group_active;
 			urow.is_photoblog_alive = oneOf(data, "num_minutes_on_site_photoblog") || urow.is_photoblog_active;
 
+			urow.has_registered = parseBoolean(row, "has_registered");
 			urow.has_pregnancystate_pregnant = parseBoolean(row, "has_pregnancystate_pregnant");
 			urow.has_pregnancystate_trying = parseBoolean(row, "has_pregnancystate_trying");
 			urow.has_profile_avatar = parseBoolean(row, "has_profile_avatar");
@@ -220,28 +219,6 @@ public class DashPipeline {
 	    		r.day.toDateTimeAtStartOfDay(DateTimeZone.UTC).toInstant()
 	    	));
 
-	    PCollection<UserStatsRow> urowsProp = pipe
-	    	.apply("ReadUserProps", BQUserPropsIO.Read.from(serverId, dfromPreload, dto))
-	    	.apply("FilterRegistered", Filter.byPredicate((UserProperties uprop) -> {
-		    		LocalDate registered_on = uprop.registered_on.toDateTime(DateTimeZone.UTC).toLocalDate();
-		    		return
-		    		    (registered_on.isAfter(dfromPreload) || registered_on.isEqual(dfromPreload)) &&
-		    		    (registered_on.isBefore(dto) || registered_on.isEqual(dto));
-	    		}))
-		    .apply("IsRegistered", MapElements
-    			.via((UserProperties uprop) -> {
-	    				UserStatsRow urow = new UserStatsRow();
-	    				urow.auth_user_id = uprop.auth_user_id;
-	    				urow.day = uprop.registered_on.toDateTime(DateTimeZone.UTC).toLocalDate();
-	    				urow.is_register = true;
-	    				return urow;
-	    			})
-    			.withOutputType(new TypeDescriptor<UserStatsRow>() {}))
-		    // make day from UserStats row as timestamp when the event occurred
-		    .apply("SetEventTimestampsProps", WithTimestamps.of((UserStatsRow r) ->
-	    		r.day.toDateTimeAtStartOfDay(DateTimeZone.UTC).toInstant()
-	    	));
-
 	    PCollection<UserStatsRow> urows1 = urowsData
 	    	.apply("IsActive1d", Filter.byPredicate((UserStatsRow urow) ->
 	    		(urow.day.isAfter(dfrom) || urow.day.isEqual(dfrom)) &&
@@ -251,7 +228,7 @@ public class DashPipeline {
 	    // compute rolling features
 	    PCollectionList<UserStatsRow> urowsList = PCollectionList.of(urows1);
 	    String[] rolling_7_28_90 = new String[] {
-	    	"is_active", "is_alive"
+	    	"is_active", "is_alive", "has_registered"
 	    };
 	    for (String f: rolling_7_28_90) {
 	    	PCollection<UserStatsRow> furows7d = urowsData
@@ -271,18 +248,6 @@ public class DashPipeline {
 			    .apply(toCamelCase(f+"28d"), new RollingBooleanFeatureFn(f, f+"28d", 28, dfrom, dto));
 	    	urowsList = urowsList.and(furows7d);
 	    }
-	    String[] rollingProp_7_28_90 = new String[] {
-		    	"is_register"
-		    };
-		    for (String f: rollingProp_7_28_90) {
-		    	PCollection<UserStatsRow> furows7d = urowsProp
-					 .apply(toCamelCase(f+"7d"), new RollingBooleanFeatureFn(f, f+"7d", 7, dfrom, dto));
-		    	PCollection<UserStatsRow> furows28d = urowsProp
-				    .apply(toCamelCase(f+"28d"), new RollingBooleanFeatureFn(f, f+"28d", 28, dfrom, dto));
-		    	PCollection<UserStatsRow> furows90d = urowsProp
-					 .apply(toCamelCase(f+"90d"), new RollingBooleanFeatureFn(f, f+"90d", 90, dfrom, dto));
-		    	urowsList = urowsList.and(furows7d).and(furows28d).and(furows90d);
-		    }
 
 	    // merge all features into one urow per [day, auth_user_id]
 	    PCollection<UserStatsRow> urowsMerged = urowsList

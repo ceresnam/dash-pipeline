@@ -27,6 +27,7 @@ public class UserStatsRow implements Cloneable {
 	/*
 	 *  Columns cached from big query table row
 	 */
+	@Nullable public boolean has_registered;
 	@Nullable public boolean has_pregnancystate_pregnant;
 	@Nullable public boolean has_pregnancystate_trying;
 	@Nullable public boolean has_profile_avatar;
@@ -61,10 +62,9 @@ public class UserStatsRow implements Cloneable {
 	@Nullable public boolean is_alive28d;
 	@Nullable public boolean is_alive90d;
 
-	@Nullable public boolean is_register;
-	@Nullable public boolean is_register7d;
-	@Nullable public boolean is_register28d;
-	@Nullable public boolean is_register90d;
+	@Nullable public boolean has_registered7d;
+	@Nullable public boolean has_registered28d;
+	@Nullable public boolean has_registered90d;
 
 	@Nullable public boolean is_bazar_alive;
 	@Nullable public boolean is_forum_alive;
@@ -108,7 +108,9 @@ public class UserStatsRow implements Cloneable {
 		for (Field f: fields) {
 			String name = f.getName();
 			if (name.startsWith("is_") ||
-				(name.startsWith("has_") && name.endsWith("28d")))
+				name.equals("has_registered7d") ||
+				name.equals("has_registered28d") ||
+				name.equals("has_registered90d"))
 			{
 				computedColumns.add(name);
 			}
