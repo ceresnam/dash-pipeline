@@ -177,7 +177,7 @@ public class DashPipeline {
 			urow.is_group_alive = oneOf(data, "num_minutes_on_site_group") || urow.is_group_active;
 			urow.is_photoblog_alive = oneOf(data, "num_minutes_on_site_photoblog") || urow.is_photoblog_active;
 
-			urow.has_registered = parseBoolean(row, "has_registered");
+			urow.has_registered = parseLong(data, "has_registered")!=0;
 
 			c.output(urow);
 		}
