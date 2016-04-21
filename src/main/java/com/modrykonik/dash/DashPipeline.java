@@ -34,6 +34,7 @@ import com.modrykonik.dash.transforms.RollingBooleanFeatureFn;
  * run in cloud with:
  *     java -jar ./target/dash-pipeline-0.0.1-SNAPSHOT-jar-with-dependencies.jar
  *         --project='maximal-beach-125109' --stagingLocation='gs://dash_import'
+ *         --filesToStage=./target/dash-pipeline-0.0.1-SNAPSHOT-jar-with-dependencies.jar
  *         --runner=DataflowPipelineRunner --autoscalingAlgorithm=THROUGHPUT_BASED --maxNumWorkers=5
  *         --serverid=202 --dfrom='2010-01-01' --dto='2010-12-31'
  */
