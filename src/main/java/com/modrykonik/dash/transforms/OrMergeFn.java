@@ -41,7 +41,7 @@ public class OrMergeFn
         	//merge urows per key
         	//PCollection<KV<LongPair, UserStatsRow>>  ->  PCollection<KV<LongPair, UserStatsRow>>
         	.apply("OrPerKey", Combine
-    	    	.perKey((Iterable<UserStatsRow> urows) -> UserStatsRow.orMerge(urows)))
+    	    	.<LongPair,UserStatsRow>perKey((Iterable<UserStatsRow> urows) -> UserStatsRow.orMerge(urows)))
         	//drop key
         	//PCollection<KV<LongPair, UserStatsRow>>  ->  PCollection<UserStatsRow>>
         	.apply("DropKey", MapElements

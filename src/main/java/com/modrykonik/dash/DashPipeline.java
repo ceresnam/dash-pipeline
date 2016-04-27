@@ -234,7 +234,7 @@ public class DashPipeline {
 	    		(urow.day.isBefore(dto) || urow.day.isEqual(dto))
 	    	));
 
-	    // compute rolling features
+		// compute rolling features
 	    PCollectionList<UserStatsRow> urowsList = PCollectionList.of(urows1);
 	    String[] rolling_7_28_90 = new String[] {
 	    	"is_active", "is_alive", "has_registered"

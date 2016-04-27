@@ -8,8 +8,8 @@ import com.google.cloud.dataflow.sdk.coders.DefaultCoder;
  */
 @DefaultCoder(AvroCoder.class)
 public class LongPair {
-	long item1;
-	long item2;
+	public long item1;
+	public long item2;
 
 	public LongPair() {}
 
