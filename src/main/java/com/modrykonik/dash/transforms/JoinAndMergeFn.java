@@ -35,7 +35,8 @@ public abstract class JoinAndMergeFn<KeyT, InputT1, InputT2, OutputT>
     public abstract KeyT getKey2(InputT2 v2);
     public abstract OutputT merge(InputT1 v1, InputT2 v2);
 
-    @Override
+    @SuppressWarnings("UnnecessaryLocalVariable")
+	@Override
     public PCollection<OutputT> apply(PCollectionTuple inputPair) {
 	    PCollection<InputT1> vals1 = inputPair.get(first);
 	    PCollection<InputT2> vals2 = inputPair.get(second);
@@ -58,7 +59,7 @@ public abstract class JoinAndMergeFn<KeyT, InputT1, InputT2, OutputT>
 	    PCollection<OutputT> merged = KeyedPCollectionTuple.of(first, kvals1).and(second, kvals2)
 	    	//PCollection<KV<KeyT,InputT1>>, PCollection<KV<KeyT,InputT2>>  ->
 	    	//PCollection<KeyT,Iterable<InputT1>,Iterable<InputT2>>>
-            .apply(CoGroupByKey.<KeyT>create())
+            .apply(CoGroupByKey.create())
             //PCollection<KeyT,Iterable<InputT1>,Iterable<InputT2>>>  ->  PCollection<OutputT>
             .apply(ParDo.of(
                 new DoFn<KV<KeyT, CoGbkResult>, OutputT>() {

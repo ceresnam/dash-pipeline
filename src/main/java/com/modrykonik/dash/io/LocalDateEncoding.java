@@ -1,13 +1,13 @@
 package com.modrykonik.dash.io;
 
-import java.io.IOException;
-
 import org.apache.avro.Schema;
 import org.apache.avro.io.Decoder;
 import org.apache.avro.io.Encoder;
 import org.apache.avro.reflect.CustomEncoding;
 import org.joda.time.DateTimeZone;
 import org.joda.time.LocalDate;
+
+import java.io.IOException;
 
 /**
  * This encoder/decoder writes a org.joda.time.LocalDate object as a long to

@@ -13,14 +13,15 @@ import com.google.cloud.dataflow.sdk.values.TypeDescriptor;
 public class UniqFn<T>
 	extends PTransform<PCollection<T>, PCollection<T>>
 {
-    @Override
+    @SuppressWarnings("RedundantTypeArguments")
+	@Override
     public PCollection<T> apply(PCollection<T> items) {
     	return items
     		//PCollection<T> -> PCollection<KV<T,Long>>
-    		.apply(Count.<T>perElement())
+    		.apply(Count.perElement())
     		//PCollection<KV<T, Long>> -> PCollection<T>
     		.apply(MapElements
-    			.via((KV<T, Long> t_count) -> t_count.getKey())
+    			.via(KV<T, Long>::getKey)
     			.withOutputType(new TypeDescriptor<T>() {}))
     		.setCoder(items.getCoder());
     }
