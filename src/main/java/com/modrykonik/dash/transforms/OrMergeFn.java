@@ -1,7 +1,5 @@
 package com.modrykonik.dash.transforms;
 
-import org.joda.time.DateTimeZone;
-
 import com.google.cloud.dataflow.sdk.transforms.Combine;
 import com.google.cloud.dataflow.sdk.transforms.Flatten;
 import com.google.cloud.dataflow.sdk.transforms.MapElements;
@@ -11,44 +9,45 @@ import com.google.cloud.dataflow.sdk.values.PCollection;
 import com.google.cloud.dataflow.sdk.values.PCollectionList;
 import com.google.cloud.dataflow.sdk.values.TypeDescriptor;
 import com.modrykonik.dash.model.LongPair;
-import com.modrykonik.dash.model.UserStatsRow;
+import com.modrykonik.dash.model.UserStatsComputedRow;
+import org.joda.time.DateTimeZone;
 
 /**
- * Merge UserStats rows per [day, auth_user_id] using logical OR.
+ * Merge UserStatsComputedRow rows per [day, auth_user_id] using logical OR.
  */
 public class OrMergeFn
-	extends PTransform<PCollectionList<UserStatsRow>, PCollection<UserStatsRow>>
+	extends PTransform<PCollectionList<UserStatsComputedRow>, PCollection<UserStatsComputedRow>>
 {
 
-    @Override
-    public PCollection<UserStatsRow> apply(PCollectionList<UserStatsRow> urowsList) {
-	    //
-	    PCollection<UserStatsRow> urowsMerged = urowsList
-	    	//concat all urows into one collection
-	    	//[PCollection<UserStatsRow>,PCollection<UserStatsRow>,...]  ->  PCollection<UserStatsRow>
+    @SuppressWarnings({"UnnecessaryLocalVariable", "RedundantTypeArguments"})
+	@Override
+    public PCollection<UserStatsComputedRow> apply(PCollectionList<UserStatsComputedRow> urowsList) {
+	    PCollection<UserStatsComputedRow> ucrowsMerged = urowsList
+	    	//concat all ucrows into one collection
+	    	//[PCollection<UserStatsComputedRow>,PCollection<UserStatsComputedRow>,...]  ->
+            //    PCollection<UserStatsComputedRow>
 	    	.apply("Concat", Flatten.pCollections())
-	    	//extract key from each urow
-	    	//PCollection<UserStatsRow>  ->  PCollection<KV<LongPair, UserStatsRow>>
+	    	//extract key from each ucrow
+	    	//PCollection<UserStatsComputedRow>  ->  PCollection<KV<LongPair, UserStatsComputedRow>>
         	.apply("ExtractKey", MapElements
-                .via((UserStatsRow urow) -> KV.of(
+                .via((UserStatsComputedRow ucrow) -> KV.of(
             		new LongPair(
-            			urow.day.toDateTimeAtStartOfDay(DateTimeZone.UTC).getMillis(),
-        				urow.auth_user_id
+            			ucrow.day.toDateTimeAtStartOfDay(DateTimeZone.UTC).getMillis(),
+        				ucrow.auth_user_id
         			),
-            		urow
+            		ucrow
                 ))
-                .withOutputType(new TypeDescriptor<KV<LongPair, UserStatsRow>>() {}))
-        	//merge urows per key
-        	//PCollection<KV<LongPair, UserStatsRow>>  ->  PCollection<KV<LongPair, UserStatsRow>>
-        	.apply("OrPerKey", Combine
-    	    	.<LongPair,UserStatsRow>perKey((Iterable<UserStatsRow> urows) -> UserStatsRow.orMerge(urows)))
+                .withOutputType(new TypeDescriptor<KV<LongPair, UserStatsComputedRow>>() {}))
+        	//merge ucrows per key
+        	//PCollection<KV<LongPair, UserStatsComputedRow>>  ->  PCollection<KV<LongPair, UserStatsComputedRow>>
+        	.apply("OrPerKey", Combine.perKey(UserStatsComputedRow::orMerge))
         	//drop key
-        	//PCollection<KV<LongPair, UserStatsRow>>  ->  PCollection<UserStatsRow>>
+        	//PCollection<KV<LongPair, UserStatsComputedRow>>  ->  PCollection<UserStatsComputedRow>>
         	.apply("DropKey", MapElements
-                    .via((KV<LongPair, UserStatsRow> key_urow) -> key_urow.getValue())
-                    .withOutputType(new TypeDescriptor<UserStatsRow>() {}));
+				.via(KV<LongPair, UserStatsComputedRow>::getValue)
+				.withOutputType(new TypeDescriptor<UserStatsComputedRow>() {}));
 
-	    return urowsMerged;
+	    return ucrowsMerged;
     }
 
 }

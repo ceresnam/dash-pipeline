@@ -4,6 +4,7 @@ import com.google.cloud.dataflow.sdk.options.Description;
 import com.google.cloud.dataflow.sdk.options.PipelineOptions;
 import com.google.cloud.dataflow.sdk.options.Validation.Required;
 
+@SuppressWarnings("unused")
 public interface DashPipelineOptions extends PipelineOptions {
     @Description("Server ID (201 or 202)")
     @Required

@@ -1,24 +1,21 @@
 package com.modrykonik.dash.model;
 
-import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.List;
-
+import com.google.api.services.bigquery.model.TableRow;
+import com.google.cloud.dataflow.sdk.coders.AvroCoder;
+import com.google.cloud.dataflow.sdk.coders.DefaultCoder;
+import com.modrykonik.dash.DashPipeline;
+import com.modrykonik.dash.io.LocalDateEncoding;
 import org.apache.avro.reflect.AvroEncode;
 import org.apache.avro.reflect.AvroIgnore;
 import org.apache.avro.reflect.Nullable;
-import org.joda.time.DateTimeZone;
+import org.joda.time.Instant;
 import org.joda.time.LocalDate;
 
-import com.google.api.services.bigquery.model.TableFieldSchema;
-import com.google.api.services.bigquery.model.TableRow;
-import com.google.api.services.bigquery.model.TableSchema;
-import com.google.cloud.dataflow.sdk.coders.AvroCoder;
-import com.google.cloud.dataflow.sdk.coders.DefaultCoder;
-import com.modrykonik.dash.io.LocalDateEncoding;
+import java.lang.reflect.Field;
+import java.util.ArrayList;
 
 @DefaultCoder(AvroCoder.class)
-public class UserStatsRow implements Cloneable {
+public class UserStatsRow {
 
 	@AvroEncode(using=LocalDateEncoding.class)
 	public LocalDate day;
@@ -29,151 +26,109 @@ public class UserStatsRow implements Cloneable {
 	 */
 	@Nullable public boolean has_registered;
 
-	/*
-	 *  Columns computed with dataflow
-	 */
-	@Nullable public boolean is_photoblog_active;
-	@Nullable public boolean is_group_active;
-	@Nullable public boolean is_pbandgroup_active;
-	@Nullable public boolean is_forum_active;
-	@Nullable public boolean is_bazar_active;
-	@Nullable public boolean is_wiki_active;
-	@Nullable public boolean is_ip_active;
-	@Nullable public boolean is_hearts_active;
-	@Nullable public boolean is_bazar_active28d;
-	@Nullable public boolean is_forum_active28d;
-	@Nullable public boolean is_group_active28d;
-	@Nullable public boolean is_photoblog_active28d;
+	@Nullable public long num_photoblog_posts;
+	@Nullable public long num_photoblog_comments;
+	@Nullable public long num_photoblog_likes_given;
+	@Nullable public long num_photoblog_likes_given_post;
 
-	@Nullable public boolean is_active;
-	@Nullable public boolean is_active7d;
-	@Nullable public boolean is_active28d;
-	@Nullable public boolean is_active90d;
+	@Nullable public long num_group_joined;
+	@Nullable public long num_group_posts;
+	@Nullable public long num_group_post_comments;
+	@Nullable public long num_group_likes_given_post;
+	@Nullable public long num_groups;
 
-	@Nullable public boolean is_alive;
-	@Nullable public boolean is_alive7d;
-	@Nullable public boolean is_alive28d;
-	@Nullable public boolean is_alive90d;
+	@Nullable public long num_forum_threads;
+	@Nullable public long num_forum_messages;
+	@Nullable public long num_forum_likes_given_thread;
+	@Nullable public long num_forum_likes_given_message;
 
-	@Nullable public boolean has_registered7d;
-	@Nullable public boolean has_registered28d;
-	@Nullable public boolean has_registered90d;
+	@Nullable public long num_bazar_products;
+	@Nullable public long num_bazar_products_reposted;
+	@Nullable public long num_bazar_reviews;
+	@Nullable public long num_bazar_transaction_message_to_seller;
+	@Nullable public long num_bazar_transaction_message_to_buyer;
+	@Nullable public long num_bazar_interest_made;
+	@Nullable public long num_bazar_wishlist_added;
+	@Nullable public long num_bazar_likes_given;
 
-	@Nullable public boolean is_bazar_alive;
-	@Nullable public boolean is_forum_alive;
-	@Nullable public boolean is_group_alive;
-	@Nullable public boolean is_photoblog_alive;
-	@Nullable public boolean is_bazar_alive28d;
-	@Nullable public boolean is_forum_alive28d;
-	@Nullable public boolean is_group_alive28d;
-	@Nullable public boolean is_photoblog_alive28d;
+	@Nullable public long num_wiki_experiences;
+	@Nullable public long num_wiki_likes_given_experience;
 
+	@Nullable public long num_ip_sent;
+	@Nullable public long num_ip_starred;
+
+	@Nullable public long num_hearts_given;
+
+	@Nullable public long num_logins;
+	@Nullable public long num_minutes_on_site;
+	@Nullable public long num_minutes_on_site_forum;
+	@Nullable public long num_minutes_on_site_bazar;
+	@Nullable public long num_minutes_on_site_group;
+	@Nullable public long num_minutes_on_site_photoblog;
 
 	public UserStatsRow() {}
 
 	@AvroIgnore
-	private static ArrayList<String> computedColumns = null;
+	private static ArrayList<String> columns = null;
 
 	/**
-	 * Returns list of columns that are computed (i.e. not loaded from big query)
+	 * Returns list of columns that are loaded from big query
 	 */
-	public static ArrayList<String> getComputedColumns() {
-		if (computedColumns!=null)
-			return computedColumns;
+	private static ArrayList<String> getColumns() {
+		if (columns!=null)
+			return columns;
 
-		computedColumns = new ArrayList<>(50);
+		columns = new ArrayList<>(50);
 		Field[] fields = UserStatsRow.class.getDeclaredFields();
 		for (Field f: fields) {
 			String name = f.getName();
-			if (name.startsWith("is_") ||
-				name.equals("has_registered7d") ||
-				name.equals("has_registered28d") ||
-				name.equals("has_registered90d"))
-			{
-				computedColumns.add(name);
+			if (name.startsWith("num_") || name.startsWith("has_")) {
+				columns.add(name);
 			}
 		}
 
-		return computedColumns;
+		return columns;
 	}
 
 	/**
-	 * Build table schema for BQ output table.
+	 * Extract BOOLEAN value from BQ table cell. Return 0 if null in BQ table
 	 */
-	public static TableSchema toBQTableSchema() {
-	    List<TableFieldSchema> dataFields = new ArrayList<>(50);
-	    for (String colName : UserStatsRow.getComputedColumns()) {
-	    	dataFields.add(new TableFieldSchema().setName(colName).setType("BOOLEAN").setMode("NULLABLE"));
-	    }
-
-	    List<TableFieldSchema> fields = new ArrayList<>(50);
-	    fields.add(new TableFieldSchema().setName("day").setType("TIMESTAMP").setMode("REQUIRED"));
-	    fields.add(new TableFieldSchema().setName("auth_user_id").setType("INTEGER").setMode("REQUIRED"));
-	    fields.add(new TableFieldSchema().setName("data").setType("RECORD").setMode("REQUIRED").setFields(dataFields));
-	    TableSchema schema = new TableSchema().setFields(fields);
-		return schema;
+	static boolean parseBoolean(TableRow row, String colName) {
+		Boolean val = (Boolean) row.get(colName);
+		return val!=null && val;
 	}
 
 	/**
-	 * convert to BQ table row
+	 * Extract INTEGER value from BQ table cell. Return 0 if null in BQ table
 	 */
-	public TableRow toBQTableRow() {
-		TableRow data = new TableRow();
-		for (String fieldName: getComputedColumns()) {
-			try {
-				Field f = UserStatsRow.class.getDeclaredField(fieldName);
-				Boolean val = f.getBoolean(this);
-				if (val!=null && val.booleanValue()) {
-					//dash aggregation queries assume null instead of FALSE value
-					data.set(fieldName, val);
-				}
-			} catch (IllegalAccessException|NoSuchFieldException e) {
-				throw new RuntimeException(e);
-			}
-		}
-
-		TableRow bqrow = new TableRow();
-		bqrow.set("day", day.toDateTimeAtStartOfDay(DateTimeZone.UTC).toString());
-		bqrow.set("auth_user_id", Long.toString(auth_user_id));
-		bqrow.set("data", data);
-
-		return bqrow;
+	static long parseLong(TableRow row, String colName) {
+		String val = (String) row.get(colName);
+		return val!=null ? Long.parseLong(val) : 0;
 	}
 
+	public static UserStatsRow fromBQTableRow(TableRow row) {
+		UserStatsRow urow = new UserStatsRow();
+		urow.day = Instant.parse((String) row.get("day"), DashPipeline.bqDatetimeFmt).toDateTime().toLocalDate();
+		urow.auth_user_id = parseLong(row, "auth_user_id");
+		assert urow.auth_user_id!=0;
 
-	/**
-	 * merge several rows for the same day and auth_user_id in to one row
-	 * using logical OR.
-	 */
-	public static UserStatsRow orMerge(Iterable<UserStatsRow> urows) {
-		UserStatsRow merged = null;
-
-		for (UserStatsRow urow : urows) {
-			if (merged==null) {
-				merged = new UserStatsRow();
-				merged.day = urow.day;
-				merged.auth_user_id = urow.auth_user_id;
-			} else {
-				assert merged.day == urow.day;
-				assert merged.auth_user_id == urow.auth_user_id;
-			}
-
-			for (String fieldName: getComputedColumns()) {
-				try {
-					Field f = UserStatsRow.class.getDeclaredField(fieldName);
-					f.setBoolean(merged, f.getBoolean(merged) || f.getBoolean(urow));
-				} catch (IllegalAccessException|NoSuchFieldException e) {
-					throw new RuntimeException(e);
+        TableRow data = (TableRow) row.get("data");
+		try {
+			for (String name : getColumns()) {
+				Field f = UserStatsRow.class.getDeclaredField(name);
+				if (f.getType().isAssignableFrom(long.class)) {
+					long val = parseLong(data, name);
+					f.setLong(urow, val);
+				} else if (f.getType().isAssignableFrom(boolean.class)) {
+					boolean val = parseLong(data, name)!=0;
+					f.setBoolean(urow, val);
 				}
 			}
+
+			return urow;
+		} catch(NoSuchFieldException | IllegalAccessException e) {
+			throw new RuntimeException(e);
 		}
-
-		return merged;
-	}
-
-	@Override
-	public Object clone() throws CloneNotSupportedException {
-		return super.clone();
 	}
 
 }

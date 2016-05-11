@@ -1,27 +1,32 @@
 package com.modrykonik.dash;
 
-import org.joda.time.DateTimeUtils;
-import org.joda.time.DateTimeZone;
-import org.joda.time.Instant;
-import org.joda.time.LocalDate;
-import org.joda.time.format.DateTimeFormat;
-import org.joda.time.format.DateTimeFormatter;
-import org.joda.time.format.DateTimeFormatterBuilder;
-
-import com.google.api.services.bigquery.model.TableRow;
 import com.google.cloud.dataflow.sdk.Pipeline;
+import com.google.cloud.dataflow.sdk.coders.AvroCoder;
+import com.google.cloud.dataflow.sdk.coders.Coder;
 import com.google.cloud.dataflow.sdk.options.DataflowPipelineOptions;
 import com.google.cloud.dataflow.sdk.options.PipelineOptionsFactory;
-import com.google.cloud.dataflow.sdk.transforms.DoFn;
 import com.google.cloud.dataflow.sdk.transforms.Filter;
 import com.google.cloud.dataflow.sdk.transforms.ParDo;
 import com.google.cloud.dataflow.sdk.transforms.WithTimestamps;
 import com.google.cloud.dataflow.sdk.values.PCollection;
 import com.google.cloud.dataflow.sdk.values.PCollectionList;
+import com.modrykonik.dash.io.BQUserStatsComputedIO;
 import com.modrykonik.dash.io.BQUserStatsIO;
+import com.modrykonik.dash.model.UserStatsComputedRow;
 import com.modrykonik.dash.model.UserStatsRow;
+import com.modrykonik.dash.transforms.ComputeFeaturesFn;
 import com.modrykonik.dash.transforms.OrMergeFn;
 import com.modrykonik.dash.transforms.RollingBooleanFeatureFn;
+import org.joda.time.DateTimeUtils;
+import org.joda.time.DateTimeZone;
+import org.joda.time.LocalDate;
+import org.joda.time.format.DateTimeFormat;
+import org.joda.time.format.DateTimeFormatter;
+import org.joda.time.format.DateTimeFormatterBuilder;
+
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Goole Cloud Dataflow pipeline for computing dash features
@@ -38,7 +43,6 @@ import com.modrykonik.dash.transforms.RollingBooleanFeatureFn;
  *         --runner=DataflowPipelineRunner --autoscalingAlgorithm=THROUGHPUT_BASED --maxNumWorkers=5
  *         --serverid=202 --dfrom='2010-01-01' --dto='2010-12-31'
  */
-@SuppressWarnings("serial")
 public class DashPipeline {
 
 	/**
@@ -55,136 +59,7 @@ public class DashPipeline {
 	    	.appendLiteral(" UTC")
 	    	.toFormatter().withZoneUTC();
 
-	/**
-	 * Import from BQ table row and computed features that depend only on data from BQ
-	 */
-	static class ImportFromBQAndComputeFeaturesFn extends DoFn<TableRow, UserStatsRow> {
-
-	    /**
-		 * Extract BOOLEAN value from BQ table cell. Return 0 if null in BQ table
-		 */
-		private boolean parseBoolean(TableRow row, String colName) {
-			Boolean val = (Boolean) row.get(colName);
-			return val!=null ? val.booleanValue() : false;
-		}
-
-		/**
-		 * Extract INTEGER value from BQ table cell. Return 0 if null in BQ table
-		 */
-		private long parseLong(TableRow row, String colName) {
-			String val = (String) row.get(colName);
-			return val!=null ? Long.parseLong(val) : 0;
-		}
-
-		/**
-		 * Return true if one of columns in BQ table row has value > 0
-		 */
-		private boolean oneOf(TableRow row, String... colNames) {
-			for (String colName : colNames) {
-				long val = parseLong(row, colName);
-				if (val>0) return true;
-			}
-			return false;
-		}
-
-		@Override
-		public void processElement(ProcessContext c) {
-			TableRow row = c.element();
-
-			UserStatsRow urow = new UserStatsRow();
-			urow.day = Instant.parse((String) row.get("day"), bqDatetimeFmt).toDateTime().toLocalDate();
-			urow.auth_user_id = Long.parseLong((String) row.get("auth_user_id"));
-			TableRow data = (TableRow) row.get("data");
-
-			// Blogy - aktivita
-			urow.is_photoblog_active = oneOf(data,
-				"num_photoblog_posts",
-				"num_photoblog_comments",
-				"num_photoblog_likes_given",
-				"num_photoblog_likes_given_post"
-			);
-
-			// Skupiny - aktivita
-			urow.is_group_active = oneOf(data,
-				"num_group_joined",
-				"num_group_posts",
-				"num_group_post_comments",
-				"num_group_likes_given_post",
-				"num_groups"
-			);
-
-			// Blogy a Skupiny - aktivita
-			urow.is_pbandgroup_active =
-				urow.is_photoblog_active ||
-				urow.is_group_active;
-
-			// Fórum - aktivita
-			urow.is_forum_active = oneOf(data,
-				"num_forum_threads",
-				"num_forum_messages",
-				"num_forum_likes_given_thread",
-				"num_forum_likes_given_message"
-			);
-
-	        // Bazár - aktivita
-			urow.is_bazar_active = oneOf(data,
-				"num_bazar_products",
-				"num_bazar_products_reposted",
-				"num_bazar_reviews",
-				"num_bazar_transaction_message_to_seller",
-				"num_bazar_transaction_message_to_buyer",
-				"num_bazar_interest_made",
-				"num_bazar_wishlist_added",
-				"num_bazar_likes_given"
-	        );
-
-			// Wiki - aktivita
-			urow.is_wiki_active = oneOf(data,
-	            "num_wiki_experiences",
-	            "num_wiki_likes_given_experience"
-	        );
-
-			// IP - aktivita
-			urow.is_ip_active = oneOf(data,
-	            "num_ip_sent",
-	            "num_ip_starred"
-	        );
-
-			// Srdiečka - aktivita
-			urow.is_hearts_active = oneOf(data,
-		        "num_hearts_given"
-	        );
-
-			//AARRR - aktivita na stránke
-			urow.is_active =
-				urow.is_photoblog_active ||
-				urow.is_group_active ||
-				urow.is_forum_active ||
-				urow.is_bazar_active ||
-				urow.is_wiki_active ||
-				urow.is_ip_active ||
-				urow.is_hearts_active;
-
-			//AARRR - alive na stránke
-			// kym sme nezbierali num_minutes_on_site, tak
-			// za is_alive povazuj aj ked spravil login alebo aktivnu akciu
-			urow.is_alive = oneOf(data,
-	            "num_logins",
-	            "num_minutes_on_site"
-	        ) || urow.is_active;
-
-			urow.is_bazar_alive = oneOf(data, "num_minutes_on_site_forum") || urow.is_bazar_active;
-			urow.is_forum_alive = oneOf(data, "num_minutes_on_site_bazar") || urow.is_forum_active;
-			urow.is_group_alive = oneOf(data, "num_minutes_on_site_group") || urow.is_group_active;
-			urow.is_photoblog_alive = oneOf(data, "num_minutes_on_site_photoblog") || urow.is_photoblog_active;
-
-			urow.has_registered = parseLong(data, "has_registered")!=0;
-
-			c.output(urow);
-		}
-	}
-
-	static String toCamelCase(String s){
+    private static String toCamelCase(String s){
 	    String camelCaseString = "";
 
 		String[] parts = s.split("_");
@@ -195,8 +70,21 @@ public class DashPipeline {
 		return camelCaseString;
 	}
 
+    @SafeVarargs
+    private static <T> List<T> concat(T[]... ta) {
+        return Stream.of(ta).flatMap(Stream::of).collect(Collectors.toList());
+    }
+
 	public static void main(String[] args) {
-		PipelineOptionsFactory.register(DashPipelineOptions.class);
+
+        try {
+            AvroCoder.of(UserStatsComputedRow.class).verifyDeterministic();
+        } catch (Coder.NonDeterministicException e) {
+            e.printStackTrace();
+            return;
+        }
+
+        PipelineOptionsFactory.register(DashPipelineOptions.class);
 		DashPipelineOptions options = PipelineOptionsFactory.
 			fromArgs(args).withValidation().as(DashPipelineOptions.class);
 
@@ -218,54 +106,73 @@ public class DashPipeline {
 
 	    Pipeline pipe = Pipeline.create(options);
 
-	    // load from big query and compute simple features
+	    // load from big query
 	    LocalDate dfromPreload = dfrom.minusDays(90-1);  // need to read back in history for rollup features
-	    PCollection<UserStatsRow> urowsData = pipe
-    		.apply("BQRead", BQUserStatsIO.Read.from(serverId, dfromPreload, dto))
-	    	.apply("BQImportAndCompute", ParDo.of(new ImportFromBQAndComputeFeaturesFn()))
+		PCollection<UserStatsRow> inputData = pipe
+			.apply("BQReadData", BQUserStatsIO.Read.from(serverId, dfromPreload, dto));
+
+		//compute simple features
+	    PCollection<UserStatsComputedRow> ucrowsInputData = inputData
+	    	.apply("Compute", ParDo.of(new ComputeFeaturesFn()))
 		    // make day from UserStats row as timestamp when the event occurred
-		    .apply("SetEventTimestamps", WithTimestamps.of((UserStatsRow r) ->
+		    .apply("SetEventTimestamps", WithTimestamps.of((UserStatsComputedRow r) ->
 	    		r.day.toDateTimeAtStartOfDay(DateTimeZone.UTC).toInstant()
 	    	));
+        PCollectionList<UserStatsComputedRow> ucrowsResultsList = PCollectionList.empty(pipe);
 
-	    PCollection<UserStatsRow> urows1 = urowsData
-	    	.apply("IsActive1d", Filter.byPredicate((UserStatsRow urow) ->
-	    		(urow.day.isAfter(dfrom) || urow.day.isEqual(dfrom)) &&
-	    		(urow.day.isBefore(dto) || urow.day.isEqual(dto))
-	    	));
+			PCollection<UserStatsComputedRow> ucrows1d = ucrowsInputData
+				.apply("IsActive1d", Filter.byPredicate((UserStatsComputedRow ucrow) ->
+					(ucrow.day.isAfter(dfrom) || ucrow.day.isEqual(dfrom)) &&
+					(ucrow.day.isBefore(dto) || ucrow.day.isEqual(dto))
+				));
+            ucrowsResultsList = ucrowsResultsList.and(ucrows1d);
 
-		// compute rolling features
-	    PCollectionList<UserStatsRow> urowsList = PCollectionList.of(urows1);
-	    String[] rolling_7_28_90 = new String[] {
-	    	"is_active", "is_alive", "has_registered"
-	    };
-	    for (String f: rolling_7_28_90) {
-	    	PCollection<UserStatsRow> furows7d = urowsData
-				 .apply(toCamelCase(f+"7d"), new RollingBooleanFeatureFn(f, f+"7d", 7, dfrom, dto));
-	    	PCollection<UserStatsRow> furows28d = urowsData
-			    .apply(toCamelCase(f+"28d"), new RollingBooleanFeatureFn(f, f+"28d", 28, dfrom, dto));
-	    	PCollection<UserStatsRow> furows90d = urowsData
-				 .apply(toCamelCase(f+"90d"), new RollingBooleanFeatureFn(f, f+"90d", 90, dfrom, dto));
-	    	urowsList = urowsList.and(furows7d).and(furows28d).and(furows90d);
-	    }
-	    String[] rolling_28 = new String[] {
-    		"is_bazar_active", "is_forum_active", "is_group_active", "is_photoblog_active",
-    		"is_bazar_alive", "is_forum_alive", "is_group_alive", "is_photoblog_alive",
-	    };
-	    for (String f: rolling_28) {
-	    	PCollection<UserStatsRow> furows7d = urowsData
-			    .apply(toCamelCase(f+"28d"), new RollingBooleanFeatureFn(f, f+"28d", 28, dfrom, dto));
-	    	urowsList = urowsList.and(furows7d);
-	    }
+		String[] rolling_7_28_90 = new String[] {
+			"is_active", "is_alive", "has_registered"
+		};
+		String[] rolling_28 = new String[] {
+			"is_bazar_active", "is_forum_active", "is_group_active", "is_photoblog_active",
+			"is_bazar_alive", "is_forum_alive", "is_group_alive", "is_photoblog_alive",
+		};
 
-	    // merge all features into one urow per [day, auth_user_id]
-	    PCollection<UserStatsRow> urowsMerged = urowsList
+        for (String f: rolling_7_28_90) {
+            String fin = f.equals("has_registered") ? "tmp_" + f : f;
+            String fout = f+"7d";
+            PCollection<UserStatsComputedRow> fucrows7d = ucrowsInputData
+                .apply(toCamelCase(fout), new RollingBooleanFeatureFn(fin, fout, 7, dfrom, dto));
+            ucrowsResultsList = ucrowsResultsList.and(fucrows7d);
+        }
+
+        for (String f: concat(rolling_7_28_90, rolling_28)) {
+            String fin = f.equals("has_registered") ? "tmp_" + f : f;
+            String fout = f+"28d";
+            PCollection<UserStatsComputedRow> fucrows28d = ucrowsInputData
+                .apply(toCamelCase(fout), new RollingBooleanFeatureFn(fin, fout, 28, dfrom, dto));
+            ucrowsResultsList = ucrowsResultsList.and(fucrows28d);
+        }
+
+        for (String f: rolling_7_28_90) {
+            String fin = f.equals("has_registered") ? "tmp_" + f : f;
+            String fout = f+"90d";
+            PCollection<UserStatsComputedRow> fucrows7d = ucrowsInputData
+                .apply(toCamelCase(fout), new RollingBooleanFeatureFn(fin, fout, 90, dfrom, dto));
+            ucrowsResultsList = ucrowsResultsList.and(fucrows7d);
+        }
+
+	    // merge all features into one ucrow per [day, auth_user_id]
+        if (false) {
+            //load existing data. If dWindow==1, table does not exist yet, so do not merge
+            PCollection<UserStatsComputedRow> existingResults = pipe
+                .apply("BQReadResults", BQUserStatsComputedIO.Read.from(serverId, dfrom, dto));
+            ucrowsResultsList = ucrowsResultsList.and(existingResults);
+        }
+
+	    PCollection<UserStatsComputedRow> ucrowsResults = ucrowsResultsList
 	    	.apply("OrMerge", new OrMergeFn());
-	    //PCollection<UserStatsRow> urowsMerged = urows1;
 
 	    // write to big query
-	    urowsMerged
-	    	.apply("BQWrite", BQUserStatsIO.Write.to(serverId, dfrom, dto));
+        ucrowsResults
+	    	.apply("BQWrite", BQUserStatsComputedIO.Write.to(serverId, dfrom, dto));
 
         pipe.run();
     }

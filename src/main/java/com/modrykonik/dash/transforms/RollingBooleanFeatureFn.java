@@ -1,23 +1,18 @@
 package com.modrykonik.dash.transforms;
 
-import java.lang.reflect.Field;
-
-import org.joda.time.Duration;
-import org.joda.time.LocalDate;
-
-import com.google.cloud.dataflow.sdk.transforms.DoFn;
+import com.google.cloud.dataflow.sdk.transforms.*;
 import com.google.cloud.dataflow.sdk.transforms.DoFn.RequiresWindowAccess;
-import com.google.cloud.dataflow.sdk.transforms.Filter;
-import com.google.cloud.dataflow.sdk.transforms.MapElements;
-import com.google.cloud.dataflow.sdk.transforms.PTransform;
-import com.google.cloud.dataflow.sdk.transforms.ParDo;
 import com.google.cloud.dataflow.sdk.transforms.windowing.GlobalWindows;
 import com.google.cloud.dataflow.sdk.transforms.windowing.IntervalWindow;
 import com.google.cloud.dataflow.sdk.transforms.windowing.SlidingWindows;
 import com.google.cloud.dataflow.sdk.transforms.windowing.Window;
 import com.google.cloud.dataflow.sdk.values.PCollection;
 import com.google.cloud.dataflow.sdk.values.TypeDescriptor;
-import com.modrykonik.dash.model.UserStatsRow;
+import com.modrykonik.dash.model.UserStatsComputedRow;
+import org.joda.time.Duration;
+import org.joda.time.LocalDate;
+
+import java.lang.reflect.Field;
 
 /**
  * Rollup of a boolean feature for N days.
@@ -27,7 +22,7 @@ import com.modrykonik.dash.model.UserStatsRow;
  *
  */
 public class RollingBooleanFeatureFn
-	extends PTransform<PCollection<UserStatsRow>, PCollection<UserStatsRow>>
+	extends PTransform<PCollection<UserStatsComputedRow>, PCollection<UserStatsComputedRow>>
 {
 
 	private final String colNameIn;
@@ -47,7 +42,7 @@ public class RollingBooleanFeatureFn
 		this.dto = dto;
 	}
 
-	class WindowedCreateUserStatsRowFn extends DoFn<Long, UserStatsRow>
+	private class WindowedCreateUserStatsComputedRowFn extends DoFn<Long, UserStatsComputedRow>
 		implements RequiresWindowAccess
 	{
 
@@ -57,41 +52,42 @@ public class RollingBooleanFeatureFn
 		{
 			IntervalWindow w = (IntervalWindow) c.window();
 
-			UserStatsRow urow = new UserStatsRow();
-			urow.day = w.end().minus(Duration.standardDays(1)).toDateTime().toLocalDate(); //end() is exclusive
-			urow.auth_user_id = c.element();
+			UserStatsComputedRow ucrow = new UserStatsComputedRow();
+			ucrow.day = w.end().minus(Duration.standardDays(1)).toDateTime().toLocalDate(); //end() is exclusive
+			ucrow.auth_user_id = c.element();
 
-			Field fieldOut = UserStatsRow.class.getDeclaredField(colNameOut);
-			fieldOut.setBoolean(urow, true);
+			Field fieldOut = UserStatsComputedRow.class.getDeclaredField(colNameOut);
+			fieldOut.setBoolean(ucrow, true);
 
-			c.output(urow);
+			c.output(ucrow);
 		}
 	}
 
-    @Override
-    public PCollection<UserStatsRow> apply(PCollection<UserStatsRow> urows)
+    @SuppressWarnings("UnnecessaryLocalVariable")
+	@Override
+    public PCollection<UserStatsComputedRow> apply(PCollection<UserStatsComputedRow> ucrows)
     	throws IllegalArgumentException
     {
-    	urows = urows
-	    	//skip urows more than numDays before dfrom and after dto, do not have to process them
-    		.apply("FilterDaysIn", Filter.byPredicate((UserStatsRow urow) ->
-        		urow.day.isAfter(dfrom.minusDays(numDays)) &&
-    			(urow.day.isBefore(dto) || urow.day.isEqual(dto))
+    	ucrows = ucrows
+	    	//skip ucrows more than numDays before dfrom and after dto, do not have to process them
+    		.apply("FilterDaysIn", Filter.byPredicate((UserStatsComputedRow ucrow) ->
+        		ucrow.day.isAfter(dfrom.minusDays(numDays)) &&
+    			(ucrow.day.isBefore(dto) || ucrow.day.isEqual(dto))
     		))
-    		//filter where urow.is_active == true
-    		.apply("FilterIsTrue", Filter.byPredicate((UserStatsRow urow) -> {
+    		//filter where ucrow.is_active == true
+    		.apply("FilterIsTrue", Filter.byPredicate((UserStatsComputedRow ucrow) -> {
 				try {
-					Field fieldIn = UserStatsRow.class.getDeclaredField(colNameIn);
-					return (boolean) fieldIn.get(urow);
+					Field fieldIn = UserStatsComputedRow.class.getDeclaredField(colNameIn);
+					return (boolean) fieldIn.get(ucrow);
 				} catch (IllegalAccessException|NoSuchFieldException e) {
 					throw new IllegalArgumentException(e);
 				}
     		}));
 
-    	// PCollection<UserStatsRow>  ->  PCollection<UserStatsRow> window
-    	PCollection<UserStatsRow> uwindow = urows
+    	// PCollection<UserStatsComputedRow>  ->  PCollection<UserStatsComputedRow> window
+    	PCollection<UserStatsComputedRow> uwindow = ucrows
     		.apply(Window.named("DailyFixedWindows")
-    			.<UserStatsRow>into(
+    			.<UserStatsComputedRow>into(
     				SlidingWindows.of(Duration.standardDays(numDays)).
     				every(Duration.standardDays(1))
     			)
@@ -99,23 +95,23 @@ public class RollingBooleanFeatureFn
     			.accumulatingFiredPanes());
 
     	PCollection<Long> uids = uwindow
-    		//PCollection<UserStatsRow>  ->  PCollection<Long>
+    		//PCollection<UserStatsComputedRow>  ->  PCollection<Long>
     		.apply("TakeUserIds", MapElements
-    			.via((UserStatsRow urow) -> urow.auth_user_id)
+    			.via((UserStatsComputedRow ucrow) -> ucrow.auth_user_id)
     			.withOutputType(new TypeDescriptor<Long>() {}))
     		//PCollection<Long>  ->  PCollection<Long>
-    		.apply("UniqUserIds", new UniqFn<Long>());
+    		.apply("UniqUserIds", new UniqFn<>());
 
-    	PCollection<UserStatsRow> urowsOut = uids
-    		//PCollection<Long> -> PCollection<UserStatsRow>
-    		.apply("CreateUserStatsRow", ParDo.of(new WindowedCreateUserStatsRowFn()))
-	    	//drop urows before dfrom and after dto, have not seen complete input data
-	    	.apply("FilterDaysOut", Filter.byPredicate((UserStatsRow urow) ->
-	    		(urow.day.isAfter(dfrom) || urow.day.isEqual(dfrom)) &&
-	    		(urow.day.isBefore(dto) || urow.day.isEqual(dto))
+    	PCollection<UserStatsComputedRow> ucrowsOut = uids
+    		//PCollection<Long> -> PCollection<UserStatsComputedRow>
+    		.apply("CreateUserStatsRow", ParDo.of(new WindowedCreateUserStatsComputedRowFn()))
+	    	//drop ucrows before dfrom and after dto, have not seen complete input data
+	    	.apply("FilterDaysOut", Filter.byPredicate((UserStatsComputedRow ucrow) ->
+	    		(ucrow.day.isAfter(dfrom) || ucrow.day.isEqual(dfrom)) &&
+	    		(ucrow.day.isBefore(dto) || ucrow.day.isEqual(dto))
 	    	))
     		.apply("WindowEnd", Window.into(new GlobalWindows()));
 
-    	return urowsOut;
+    	return ucrowsOut;
     }
 }
