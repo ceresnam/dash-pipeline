@@ -4,10 +4,9 @@ import com.google.api.services.bigquery.model.TableRow;
 import com.google.cloud.dataflow.sdk.coders.AvroCoder;
 import com.google.cloud.dataflow.sdk.coders.DefaultCoder;
 import com.modrykonik.dash.DashPipeline;
-import com.modrykonik.dash.io.LocalDateEncoding;
-import org.apache.avro.reflect.AvroEncode;
 import org.apache.avro.reflect.AvroIgnore;
 import org.apache.avro.reflect.Nullable;
+import org.joda.time.DateTimeZone;
 import org.joda.time.Instant;
 import org.joda.time.LocalDate;
 
@@ -17,8 +16,7 @@ import java.util.ArrayList;
 @DefaultCoder(AvroCoder.class)
 public class UserStatsRow {
 
-	@AvroEncode(using=LocalDateEncoding.class)
-	public LocalDate day;
+	public long day;
 	public long auth_user_id;
 
 	/*
@@ -90,7 +88,26 @@ public class UserStatsRow {
 		return columns;
 	}
 
-	/**
+    /**
+     * Extract DATE value from BQ table cell
+     */
+    static LocalDate parseDate(TableRow row, String colName) {
+        String val = (String) row.get(colName);
+        if (val==null)
+            return null;
+        else
+            return Instant.parse(val, DashPipeline.bqDatetimeFmt).toDateTime(DateTimeZone.UTC).toLocalDate();
+    }
+
+    /**
+     * Extract DATE value from BQ table cell. Return 0 if null in BQ table
+     */
+    static long parseDateMillis(TableRow row, String colName) {
+        LocalDate d = parseDate(row, colName);
+        return d==null ? 0 : d.toDateTimeAtStartOfDay(DateTimeZone.UTC).getMillis();
+    }
+
+    /**
 	 * Extract BOOLEAN value from BQ table cell. Return 0 if null in BQ table
 	 */
 	static boolean parseBoolean(TableRow row, String colName) {
@@ -108,9 +125,9 @@ public class UserStatsRow {
 
 	public static UserStatsRow fromBQTableRow(TableRow row) {
 		UserStatsRow urow = new UserStatsRow();
-		urow.day = Instant.parse((String) row.get("day"), DashPipeline.bqDatetimeFmt).toDateTime().toLocalDate();
+		urow.day = parseDateMillis(row, "day");
 		urow.auth_user_id = parseLong(row, "auth_user_id");
-		assert urow.auth_user_id!=0;
+		assert urow.day!=0 && urow.auth_user_id!=0;
 
         TableRow data = (TableRow) row.get("data");
 		try {

@@ -10,7 +10,6 @@ import com.google.cloud.dataflow.sdk.values.PCollectionList;
 import com.google.cloud.dataflow.sdk.values.TypeDescriptor;
 import com.modrykonik.dash.model.LongPair;
 import com.modrykonik.dash.model.UserStatsComputedRow;
-import org.joda.time.DateTimeZone;
 
 /**
  * Merge UserStatsComputedRow rows per [day, auth_user_id] using logical OR.
@@ -32,7 +31,7 @@ public class OrMergeFn
         	.apply("ExtractKey", MapElements
                 .via((UserStatsComputedRow ucrow) -> KV.of(
             		new LongPair(
-            			ucrow.day.toDateTimeAtStartOfDay(DateTimeZone.UTC).getMillis(),
+            			ucrow.day,
         				ucrow.auth_user_id
         			),
             		ucrow

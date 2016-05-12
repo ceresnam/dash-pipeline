@@ -19,6 +19,7 @@ import com.modrykonik.dash.transforms.OrMergeFn;
 import com.modrykonik.dash.transforms.RollingBooleanFeatureFn;
 import org.joda.time.DateTimeUtils;
 import org.joda.time.DateTimeZone;
+import org.joda.time.Instant;
 import org.joda.time.LocalDate;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
@@ -115,9 +116,7 @@ public class DashPipeline {
 	    PCollection<UserStatsComputedRow> ucrowsInputData = inputData
 	    	.apply("Compute", ParDo.of(new ComputeFeaturesFn()))
 		    // make day from UserStats row as timestamp when the event occurred
-		    .apply("SetEventTimestamps", WithTimestamps.of((UserStatsComputedRow r) ->
-	    		r.day.toDateTimeAtStartOfDay(DateTimeZone.UTC).toInstant()
-	    	));
+		    .apply("SetEventTimestamps", WithTimestamps.of((UserStatsComputedRow r) -> new Instant(r.day)));
         PCollectionList<UserStatsComputedRow> ucrowsResultsList = PCollectionList.empty(pipe);
 
         PCollection<UserStatsComputedRow> ucrows1d = ucrowsInputData

@@ -5,9 +5,6 @@ import com.google.api.services.bigquery.model.TableRow;
 import com.google.api.services.bigquery.model.TableSchema;
 import com.google.cloud.dataflow.sdk.coders.AvroCoder;
 import com.google.cloud.dataflow.sdk.coders.DefaultCoder;
-import com.modrykonik.dash.DashPipeline;
-import com.modrykonik.dash.io.LocalDateEncoding;
-import org.apache.avro.reflect.AvroEncode;
 import org.apache.avro.reflect.AvroIgnore;
 import org.apache.avro.reflect.Nullable;
 import org.joda.time.DateTimeZone;
@@ -21,8 +18,7 @@ import java.util.List;
 @DefaultCoder(AvroCoder.class)
 public class UserStatsComputedRow {
 
-	@AvroEncode(using=LocalDateEncoding.class)
-	public LocalDate day;
+	public long day;
 	public long auth_user_id;
 
 	/*
@@ -89,6 +85,10 @@ public class UserStatsComputedRow {
 		return columns;
 	}
 
+	public LocalDate dayAsDate() {
+		return new Instant(day).toDateTime(DateTimeZone.UTC).toLocalDate();
+	}
+
 	/**
 	 * Return true, if row's date is between dates dfrom (inclusive) and dto (inclusive)
 	 * @param dfrom date interval start
@@ -104,11 +104,11 @@ public class UserStatsComputedRow {
 
 	public static UserStatsComputedRow fromBQTableRow(TableRow row) {
 		UserStatsComputedRow ucrow = new UserStatsComputedRow();
-		ucrow.day = Instant.parse((String) row.get("day"), DashPipeline.bqDatetimeFmt).toDateTime().toLocalDate();
+		ucrow.day = UserStatsRow.parseDateMillis(row, "day");
 		ucrow.auth_user_id = UserStatsRow.parseLong(row, "auth_user_id");
-		assert ucrow.auth_user_id!=0;
+		assert ucrow.day!=0 && ucrow.auth_user_id!=0;
 
-        TableRow data = (TableRow) row.get("data");
+		TableRow data = (TableRow) row.get("data");
 		try {
 			for (String name : getColumns()) {
 				Field f = UserStatsComputedRow.class.getDeclaredField(name);
@@ -167,7 +167,7 @@ public class UserStatsComputedRow {
         assert !allFalse;
 
 		TableRow bqrow = new TableRow();
-		bqrow.set("day", day.toDateTimeAtStartOfDay(DateTimeZone.UTC).toString());
+		bqrow.set("day", new Instant(day).toDateTime(DateTimeZone.UTC).toString());
 		bqrow.set("auth_user_id", Long.toString(auth_user_id));
 		bqrow.set("data", data);
 

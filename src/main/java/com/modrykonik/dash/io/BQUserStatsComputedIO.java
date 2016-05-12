@@ -115,7 +115,7 @@ public class BQUserStatsComputedIO {
 			    	@Override
 			    	public int partitionFor(UserStatsComputedRow ucrow, int numPartitions) {
                         assert ucrow.dayBetween(dfrom, dto);
-			    		return monthsBetween(dfrom, ucrow.day);
+			    		return monthsBetween(dfrom, ucrow.dayAsDate());
 			    	}
 			    }));
 

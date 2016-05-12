@@ -9,6 +9,7 @@ import com.google.cloud.dataflow.sdk.transforms.windowing.Window;
 import com.google.cloud.dataflow.sdk.values.PCollection;
 import com.google.cloud.dataflow.sdk.values.TypeDescriptor;
 import com.modrykonik.dash.model.UserStatsComputedRow;
+import org.joda.time.DateTimeZone;
 import org.joda.time.Duration;
 import org.joda.time.LocalDate;
 
@@ -53,7 +54,11 @@ public class RollingBooleanFeatureFn
 			IntervalWindow w = (IntervalWindow) c.window();
 
 			UserStatsComputedRow ucrow = new UserStatsComputedRow();
-			ucrow.day = w.end().minus(Duration.standardDays(1)).toDateTime().toLocalDate(); //end() is exclusive
+			ucrow.day = w.end()
+                .minus(Duration.standardDays(1)) //end() is exclusive
+                //ensure time is 00:00:00
+                .toDateTime(DateTimeZone.UTC).toLocalDate().toDateTimeAtStartOfDay(DateTimeZone.UTC)
+                .getMillis();
 			ucrow.auth_user_id = c.element();
 
 			Field fieldOut = UserStatsComputedRow.class.getDeclaredField(colNameOut);
