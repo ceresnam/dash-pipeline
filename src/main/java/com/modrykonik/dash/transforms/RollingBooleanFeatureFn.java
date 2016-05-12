@@ -91,7 +91,12 @@ public class RollingBooleanFeatureFn
             //PCollection<UserStatsComputedRow>  ->  PCollection<Long>
             .apply("TakeUserIds", MapElements
                     .via((UserStatsComputedRow ucrow) -> ucrow.auth_user_id)
-                    .withOutputType(new TypeDescriptor<Long>() {}));
+                    .withOutputType(new TypeDescriptor<Long>() {}))
+            //force to materialize PCollection<Long> by using GroupByKey
+            //see https://cloud.google.com/dataflow/service/dataflow-service-desc#fusion-prevention
+            //this fixes java.lang.OutOfMemoryError
+            //http://stackoverflow.com/questions/36793797/
+            .apply("Materialize", new UniqFn<>());
 
     	// PCollection<UserStatsComputedRow>  ->  PCollection<UserStatsComputedRow> window
     	PCollection<Long> uwindow = uids
