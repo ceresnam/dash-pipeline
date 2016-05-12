@@ -157,14 +157,15 @@ public class DashPipeline {
             ucrowsResultsList = ucrowsResultsList.and(fucrows7d);
         }
 
-	    // merge all features into one ucrow per [day, auth_user_id]
+        //noinspection ConstantConditions,ConstantIfStatement
         if (false) {
-            //load existing data. If dWindow==1, table does not exist yet, so do not merge
+            //optionally, load and merge with existing data
             PCollection<UserStatsComputedRow> existingResults = pipe
                 .apply("BQReadResults", BQUserStatsComputedIO.Read.from(serverId, dfrom, dto));
             ucrowsResultsList = ucrowsResultsList.and(existingResults);
         }
 
+        // merge all features into one ucrow per [day, auth_user_id]
 	    PCollection<UserStatsComputedRow> ucrowsResults = ucrowsResultsList
 	    	.apply("OrMerge", new OrMergeFn());
 

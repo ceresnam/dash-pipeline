@@ -73,7 +73,7 @@ public class RollingBooleanFeatureFn
     public PCollection<UserStatsComputedRow> apply(PCollection<UserStatsComputedRow> ucrows)
     	throws IllegalArgumentException
     {
-    	ucrows = ucrows
+        PCollection<Long> uids = ucrows
 	    	//skip ucrows more than numDays before dfrom and after dto, do not have to process them
     		.apply("FilterDaysIn", Filter.byPredicate(
                 (UserStatsComputedRow ucrow) -> ucrow.dayBetween(dfrom.minusDays(numDays-1), dto)
@@ -86,27 +86,27 @@ public class RollingBooleanFeatureFn
 				} catch (IllegalAccessException|NoSuchFieldException e) {
 					throw new IllegalArgumentException(e);
 				}
-    		}));
+    		}))
+            //optimization. select only user id, day is keept in dataflow's timestamp
+            //PCollection<UserStatsComputedRow>  ->  PCollection<Long>
+            .apply("TakeUserIds", MapElements
+                    .via((UserStatsComputedRow ucrow) -> ucrow.auth_user_id)
+                    .withOutputType(new TypeDescriptor<Long>() {}));
 
     	// PCollection<UserStatsComputedRow>  ->  PCollection<UserStatsComputedRow> window
-    	PCollection<UserStatsComputedRow> uwindow = ucrows
+    	PCollection<Long> uwindow = uids
     		.apply(Window.named("DailyFixedWindows")
-    			.<UserStatsComputedRow>into(
+    			.<Long>into(
     				SlidingWindows.of(Duration.standardDays(numDays)).
     				every(Duration.standardDays(1))
     			)
     			//.triggering(AfterWatermark.pastEndOfWindow())
     			.accumulatingFiredPanes());
 
-    	PCollection<Long> uids = uwindow
-    		//PCollection<UserStatsComputedRow>  ->  PCollection<Long>
-    		.apply("TakeUserIds", MapElements
-    			.via((UserStatsComputedRow ucrow) -> ucrow.auth_user_id)
-    			.withOutputType(new TypeDescriptor<Long>() {}))
-    		//PCollection<Long>  ->  PCollection<Long>
-    		.apply("UniqUserIds", new UniqFn<>());
-
-    	PCollection<UserStatsComputedRow> ucrowsOut = uids
+    	PCollection<UserStatsComputedRow> ucrowsOut = uwindow
+            //keep each userid only once per each day (i.e. last day of window)
+            //PCollection<Long>  ->  PCollection<Long>
+            .apply("UniqUserIds", new UniqFn<>())
     		//PCollection<Long> -> PCollection<UserStatsComputedRow>
     		.apply("CreateUserStatsRow", ParDo.of(new WindowedCreateUserStatsComputedRowFn()))
 	    	//drop ucrows before dfrom and after dto, have not seen complete input data
