@@ -70,10 +70,9 @@ public class RollingBooleanFeatureFn
     {
     	ucrows = ucrows
 	    	//skip ucrows more than numDays before dfrom and after dto, do not have to process them
-    		.apply("FilterDaysIn", Filter.byPredicate((UserStatsComputedRow ucrow) ->
-        		ucrow.day.isAfter(dfrom.minusDays(numDays)) &&
-    			(ucrow.day.isBefore(dto) || ucrow.day.isEqual(dto))
-    		))
+    		.apply("FilterDaysIn", Filter.byPredicate(
+                (UserStatsComputedRow ucrow) -> ucrow.dayBetween(dfrom.minusDays(numDays-1), dto)
+            ))
     		//filter where ucrow.is_active == true
     		.apply("FilterIsTrue", Filter.byPredicate((UserStatsComputedRow ucrow) -> {
 				try {
@@ -106,10 +105,9 @@ public class RollingBooleanFeatureFn
     		//PCollection<Long> -> PCollection<UserStatsComputedRow>
     		.apply("CreateUserStatsRow", ParDo.of(new WindowedCreateUserStatsComputedRowFn()))
 	    	//drop ucrows before dfrom and after dto, have not seen complete input data
-	    	.apply("FilterDaysOut", Filter.byPredicate((UserStatsComputedRow ucrow) ->
-	    		(ucrow.day.isAfter(dfrom) || ucrow.day.isEqual(dfrom)) &&
-	    		(ucrow.day.isBefore(dto) || ucrow.day.isEqual(dto))
-	    	))
+	    	.apply("FilterDaysOut", Filter.byPredicate(
+                (UserStatsComputedRow ucrow) -> ucrow.dayBetween(dfrom, dto))
+            )
     		.apply("WindowEnd", Window.into(new GlobalWindows()));
 
     	return ucrowsOut;

@@ -89,6 +89,19 @@ public class UserStatsComputedRow {
 		return columns;
 	}
 
+	/**
+	 * Return true, if row's date is between dates dfrom (inclusive) and dto (inclusive)
+	 * @param dfrom date interval start
+	 * @param dto date interval end
+     * @return true if in interval
+     */
+	public boolean dayBetween(LocalDate dfrom, LocalDate dto) {
+		LocalDate d = dayAsDate();
+		return
+			(d.isAfter(dfrom) || d.isEqual(dfrom)) &&
+			(d.isBefore(dto) || d.isEqual(dto));
+	}
+
 	public static UserStatsComputedRow fromBQTableRow(TableRow row) {
 		UserStatsComputedRow ucrow = new UserStatsComputedRow();
 		ucrow.day = Instant.parse((String) row.get("day"), DashPipeline.bqDatetimeFmt).toDateTime().toLocalDate();

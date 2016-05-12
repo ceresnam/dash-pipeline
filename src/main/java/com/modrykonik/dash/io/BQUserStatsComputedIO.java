@@ -114,8 +114,7 @@ public class BQUserStatsComputedIO {
 			    .apply("Partition", Partition.of(monthsBetween(dfrom, dto)+1, new PartitionFn<UserStatsComputedRow>() {
 			    	@Override
 			    	public int partitionFor(UserStatsComputedRow ucrow, int numPartitions) {
-			    		assert ucrow.day.isAfter(dfrom) || ucrow.day.isEqual(dfrom);
-			    		assert ucrow.day.isBefore(dto) || ucrow.day.isEqual(dto);
+                        assert ucrow.dayBetween(dfrom, dto);
 			    		return monthsBetween(dfrom, ucrow.day);
 			    	}
 			    }));

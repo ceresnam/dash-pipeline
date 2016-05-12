@@ -120,12 +120,11 @@ public class DashPipeline {
 	    	));
         PCollectionList<UserStatsComputedRow> ucrowsResultsList = PCollectionList.empty(pipe);
 
-			PCollection<UserStatsComputedRow> ucrows1d = ucrowsInputData
-				.apply("IsActive1d", Filter.byPredicate((UserStatsComputedRow ucrow) ->
-					(ucrow.day.isAfter(dfrom) || ucrow.day.isEqual(dfrom)) &&
-					(ucrow.day.isBefore(dto) || ucrow.day.isEqual(dto))
-				));
-            ucrowsResultsList = ucrowsResultsList.and(ucrows1d);
+        PCollection<UserStatsComputedRow> ucrows1d = ucrowsInputData
+            .apply("IsActive1d", Filter.byPredicate(
+                (UserStatsComputedRow ucrow) -> ucrow.dayBetween(dfrom, dto)
+            ));
+        ucrowsResultsList = ucrowsResultsList.and(ucrows1d);
 
 		String[] rolling_7_28_90 = new String[] {
 			"is_active", "is_alive", "has_registered"
