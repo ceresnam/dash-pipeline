@@ -5,7 +5,7 @@ import com.modrykonik.dash.model.UserStatsRow;
 import org.apache.beam.sdk.transforms.DoFn;
 
 /**
- * Import from BQ table row and computed features that depend only on data from BQ
+ * Compute features from data in BQ row
  */
 public class ComputeFeaturesFn extends DoFn<UserStatsRow, UserStatsComputedRow> {
 
@@ -14,11 +14,8 @@ public class ComputeFeaturesFn extends DoFn<UserStatsRow, UserStatsComputedRow> 
         UserStatsRow data = c.element();
 
         UserStatsComputedRow ucrow = new UserStatsComputedRow();
-        //urow.day = Instant.parse((String) row.get("day"), bqDatetimeFmt).toDateTime().toLocalDate();
-        //urow.auth_user_id = Long.parseLong((String) row.get("auth_user_id"));
         ucrow.day = data.day;
         ucrow.auth_user_id = data.auth_user_id;
-        //TableRow data = (TableRow) row.get("data");
 
         // Blogy - aktivita
         ucrow.is_photoblog_active =
@@ -96,6 +93,18 @@ public class ComputeFeaturesFn extends DoFn<UserStatsRow, UserStatsComputedRow> 
         ucrow.is_photoblog_alive = data.num_minutes_on_site_photoblog > 0 || ucrow.is_photoblog_active;
 
         ucrow.tmp_has_registered = data.has_registered;
+
+        ucrow.is_desktop = data.num_minutes_on_site_desktop > 0;
+        ucrow.is_mobile = data.num_minutes_on_site_mobile > 0;
+
+        ucrow.num_words =
+            data.num_words_bazaar +
+            data.num_words_forum +
+            data.num_words_photoblog_album +
+            data.num_words_photoblog_article +
+            data.num_words_photoblog_short_message +
+            data.num_words_wiki_article +
+            data.num_words_wiki_experience;
 
         c.output(ucrow);
     }
