@@ -1,8 +1,9 @@
 package com.modrykonik.dash;
 
-import com.google.cloud.dataflow.sdk.options.Description;
-import com.google.cloud.dataflow.sdk.options.PipelineOptions;
-import com.google.cloud.dataflow.sdk.options.Validation.Required;
+import org.apache.beam.sdk.options.Description;
+import org.apache.beam.sdk.options.PipelineOptions;
+import org.apache.beam.sdk.options.Validation.Required;
+import org.apache.beam.sdk.options.ValueProvider;
 
 @SuppressWarnings("unused")
 public interface DashPipelineOptions extends PipelineOptions {

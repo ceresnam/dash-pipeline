@@ -1,39 +1,39 @@
 package com.modrykonik.dash.transforms;
 
-import com.google.cloud.dataflow.sdk.transforms.DoFn;
 import com.modrykonik.dash.model.UserStatsComputedRow;
 import com.modrykonik.dash.model.UserStatsRow;
+import org.apache.beam.sdk.transforms.DoFn;
 
 /**
  * Import from BQ table row and computed features that depend only on data from BQ
  */
 public class ComputeFeaturesFn extends DoFn<UserStatsRow, UserStatsComputedRow> {
 
-    @Override
+    @ProcessElement
     public void processElement(ProcessContext c) {
-		UserStatsRow data = c.element();
+        UserStatsRow data = c.element();
 
         UserStatsComputedRow ucrow = new UserStatsComputedRow();
         //urow.day = Instant.parse((String) row.get("day"), bqDatetimeFmt).toDateTime().toLocalDate();
         //urow.auth_user_id = Long.parseLong((String) row.get("auth_user_id"));
-		ucrow.day = data.day;
-		ucrow.auth_user_id = data.auth_user_id;
+        ucrow.day = data.day;
+        ucrow.auth_user_id = data.auth_user_id;
         //TableRow data = (TableRow) row.get("data");
 
         // Blogy - aktivita
         ucrow.is_photoblog_active =
             data.num_photoblog_posts > 0 ||
-			data.num_photoblog_comments > 0 ||
-			data.num_photoblog_likes_given > 0 ||
-			data.num_photoblog_likes_given_post > 0;
+            data.num_photoblog_comments > 0 ||
+            data.num_photoblog_likes_given > 0 ||
+            data.num_photoblog_likes_given_post > 0;
 
         // Skupiny - aktivita
         ucrow.is_group_active =
             data.num_group_joined > 0 ||
-			data.num_group_posts > 0 ||
-			data.num_group_post_comments > 0 ||
-			data.num_group_likes_given_post > 0 ||
-			data.num_groups > 0;
+            data.num_group_posts > 0 ||
+            data.num_group_post_comments > 0 ||
+            data.num_group_likes_given_post > 0 ||
+            data.num_groups > 0;
 
         // Blogy a Skupiny - aktivita
         ucrow.is_pbandgroup_active =
@@ -42,31 +42,31 @@ public class ComputeFeaturesFn extends DoFn<UserStatsRow, UserStatsComputedRow> 
 
         // Fórum - aktivita
         ucrow.is_forum_active =
-			data.num_forum_threads > 0 ||
-			data.num_forum_messages > 0 ||
-			data.num_forum_likes_given_thread > 0 ||
+            data.num_forum_threads > 0 ||
+            data.num_forum_messages > 0 ||
+            data.num_forum_likes_given_thread > 0 ||
             data.num_forum_likes_given_message > 0;
 
         // Bazár - aktivita
         ucrow.is_bazar_active =
-			data.num_bazar_products > 0 ||
-			data.num_bazar_products_reposted > 0 ||
-			data.num_bazar_reviews > 0 ||
-			data.num_bazar_transaction_message_to_seller > 0 ||
-			data.num_bazar_transaction_message_to_buyer > 0 ||
-			data.num_bazar_interest_made > 0 ||
-			data.num_bazar_wishlist_added > 0 ||
-			data.num_bazar_likes_given > 0;
+            data.num_bazar_products > 0 ||
+            data.num_bazar_products_reposted > 0 ||
+            data.num_bazar_reviews > 0 ||
+            data.num_bazar_transaction_message_to_seller > 0 ||
+            data.num_bazar_transaction_message_to_buyer > 0 ||
+            data.num_bazar_interest_made > 0 ||
+            data.num_bazar_wishlist_added > 0 ||
+            data.num_bazar_likes_given > 0;
 
         // Wiki - aktivita
         ucrow.is_wiki_active =
             data.num_wiki_experiences > 0 ||
-			data.num_wiki_likes_given_experience > 0;
+            data.num_wiki_likes_given_experience > 0;
 
         // IP - aktivita
         ucrow.is_ip_active =
             data.num_ip_sent > 0 ||
-			data.num_ip_starred > 0;
+            data.num_ip_starred > 0;
 
         // Srdiečka - aktivita
         ucrow.is_hearts_active =
@@ -86,9 +86,9 @@ public class ComputeFeaturesFn extends DoFn<UserStatsRow, UserStatsComputedRow> 
         // kym sme nezbierali num_minutes_on_site, tak
         // za is_alive povazuj aj ked spravil login alebo aktivnu akciu
         ucrow.is_alive =
-			data.num_logins > 0 ||
-			data.num_minutes_on_site > 0 ||
-			ucrow.is_active;
+            data.num_logins > 0 ||
+            data.num_minutes_on_site > 0 ||
+            ucrow.is_active;
 
         ucrow.is_bazar_alive = data.num_minutes_on_site_forum > 0 || ucrow.is_bazar_active;
         ucrow.is_forum_alive = data.num_minutes_on_site_bazar > 0 || ucrow.is_forum_active;

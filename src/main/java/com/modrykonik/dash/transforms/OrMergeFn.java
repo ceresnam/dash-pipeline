@@ -1,52 +1,51 @@
 package com.modrykonik.dash.transforms;
 
-import com.google.cloud.dataflow.sdk.transforms.Combine;
-import com.google.cloud.dataflow.sdk.transforms.Flatten;
-import com.google.cloud.dataflow.sdk.transforms.MapElements;
-import com.google.cloud.dataflow.sdk.transforms.PTransform;
-import com.google.cloud.dataflow.sdk.values.KV;
-import com.google.cloud.dataflow.sdk.values.PCollection;
-import com.google.cloud.dataflow.sdk.values.PCollectionList;
-import com.google.cloud.dataflow.sdk.values.TypeDescriptor;
-import com.modrykonik.dash.model.LongPair;
 import com.modrykonik.dash.model.UserStatsComputedRow;
+import org.apache.beam.sdk.transforms.Combine;
+import org.apache.beam.sdk.transforms.Flatten;
+import org.apache.beam.sdk.transforms.MapElements;
+import org.apache.beam.sdk.transforms.PTransform;
+import org.apache.beam.sdk.values.KV;
+import org.apache.beam.sdk.values.PCollection;
+import org.apache.beam.sdk.values.PCollectionList;
+import org.apache.beam.sdk.values.TypeDescriptor;
 
 /**
  * Merge UserStatsComputedRow rows per [day, auth_user_id] using logical OR.
  */
 public class OrMergeFn
-	extends PTransform<PCollectionList<UserStatsComputedRow>, PCollection<UserStatsComputedRow>>
+    extends PTransform<PCollectionList<UserStatsComputedRow>, PCollection<UserStatsComputedRow>>
 {
 
     @SuppressWarnings({"UnnecessaryLocalVariable", "RedundantTypeArguments"})
-	@Override
-    public PCollection<UserStatsComputedRow> apply(PCollectionList<UserStatsComputedRow> urowsList) {
-	    PCollection<UserStatsComputedRow> ucrowsMerged = urowsList
-	    	//concat all ucrows into one collection
-	    	//[PCollection<UserStatsComputedRow>,PCollection<UserStatsComputedRow>,...]  ->
+    @Override
+    public PCollection<UserStatsComputedRow> expand(PCollectionList<UserStatsComputedRow> urowsList) {
+        PCollection<UserStatsComputedRow> ucrowsMerged = urowsList
+            //concat all ucrows into one collection
+            //[PCollection<UserStatsComputedRow>,PCollection<UserStatsComputedRow>,...]  ->
             //    PCollection<UserStatsComputedRow>
-	    	.apply("Concat", Flatten.pCollections())
-	    	//extract key from each ucrow
-	    	//PCollection<UserStatsComputedRow>  ->  PCollection<KV<LongPair, UserStatsComputedRow>>
-        	.apply("ExtractKey", MapElements
+            .apply("Concat", Flatten.pCollections())
+            //extract key from each ucrow
+            //PCollection<UserStatsComputedRow>  ->  PCollection<KV<KV<Long, Long>, UserStatsComputedRow>>
+            .apply("ExtractKey", MapElements
+                .into(new TypeDescriptor<KV<KV<Long, Long>, UserStatsComputedRow>>() {})
                 .via((UserStatsComputedRow ucrow) -> KV.of(
-            		new LongPair(
-            			ucrow.day,
-        				ucrow.auth_user_id
-        			),
-            		ucrow
-                ))
-                .withOutputType(new TypeDescriptor<KV<LongPair, UserStatsComputedRow>>() {}))
-        	//merge ucrows per key
-        	//PCollection<KV<LongPair, UserStatsComputedRow>>  ->  PCollection<KV<LongPair, UserStatsComputedRow>>
-        	.apply("OrPerKey", Combine.perKey(UserStatsComputedRow::orMerge))
-        	//drop key
-        	//PCollection<KV<LongPair, UserStatsComputedRow>>  ->  PCollection<UserStatsComputedRow>>
-        	.apply("DropKey", MapElements
-				.via(KV<LongPair, UserStatsComputedRow>::getValue)
-				.withOutputType(new TypeDescriptor<UserStatsComputedRow>() {}));
+                    KV.of(
+                        ucrow.day,
+                        ucrow.auth_user_id
+                    ),
+                    ucrow
+                )))
+            //merge ucrows per key
+            //PCollection<KV<KV<Long, Long>, UserStatsComputedRow>>  ->  PCollection<KV<KV<Long, Long>, UserStatsComputedRow>>
+            .apply("OrPerKey", Combine.perKey(UserStatsComputedRow::orMerge))
+            //drop key
+            //PCollection<KV<KV<Long, Long>, UserStatsComputedRow>>  ->  PCollection<UserStatsComputedRow>>
+            .apply("DropKey", MapElements
+                .into(new TypeDescriptor<UserStatsComputedRow>() {})
+                .via(KV<KV<Long, Long>, UserStatsComputedRow>::getValue));
 
-	    return ucrowsMerged;
+        return ucrowsMerged;
     }
 
 }

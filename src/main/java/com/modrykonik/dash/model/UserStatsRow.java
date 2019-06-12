@@ -1,14 +1,14 @@
 package com.modrykonik.dash.model;
 
 import com.google.api.services.bigquery.model.TableRow;
-import com.google.cloud.dataflow.sdk.coders.AvroCoder;
-import com.google.cloud.dataflow.sdk.coders.DefaultCoder;
 import com.modrykonik.dash.DashPipeline;
 import org.apache.avro.reflect.AvroIgnore;
 import org.apache.avro.reflect.Nullable;
 import org.joda.time.DateTimeZone;
 import org.joda.time.Instant;
 import org.joda.time.LocalDate;
+import org.apache.beam.sdk.coders.AvroCoder;
+import org.apache.beam.sdk.coders.DefaultCoder;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;

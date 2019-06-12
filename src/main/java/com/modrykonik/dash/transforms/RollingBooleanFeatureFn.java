@@ -1,19 +1,17 @@
 package com.modrykonik.dash.transforms;
 
-import com.google.cloud.dataflow.sdk.transforms.*;
-import com.google.cloud.dataflow.sdk.transforms.DoFn.RequiresWindowAccess;
-import com.google.cloud.dataflow.sdk.transforms.windowing.GlobalWindows;
-import com.google.cloud.dataflow.sdk.transforms.windowing.IntervalWindow;
-import com.google.cloud.dataflow.sdk.transforms.windowing.SlidingWindows;
-import com.google.cloud.dataflow.sdk.transforms.windowing.Window;
-import com.google.cloud.dataflow.sdk.values.PCollection;
-import com.google.cloud.dataflow.sdk.values.TypeDescriptor;
+import com.modrykonik.dash.model.DateUtils;
 import com.modrykonik.dash.model.UserStatsComputedRow;
-import org.joda.time.DateTimeZone;
+import org.apache.beam.sdk.options.ValueProvider;
+import org.apache.beam.sdk.options.ValueProvider.NestedValueProvider;
+import org.apache.beam.sdk.transforms.*;
+import org.apache.beam.sdk.values.KV;
+import org.apache.beam.sdk.values.PCollection;
 import org.joda.time.Duration;
+import org.joda.time.Instant;
 import org.joda.time.LocalDate;
 
-import java.lang.reflect.Field;
+import static com.modrykonik.dash.model.DateUtils.*;
 
 /**
  * Rollup of a boolean feature for N days.
@@ -23,103 +21,97 @@ import java.lang.reflect.Field;
  *
  */
 public class RollingBooleanFeatureFn
-	extends PTransform<PCollection<UserStatsComputedRow>, PCollection<UserStatsComputedRow>>
+    extends PTransform<PCollection<UserStatsComputedRow>, PCollection<UserStatsComputedRow>>
 {
 
-	private final String colNameIn;
-	private final String colNameOut;
-	private final int numDays;
-	private final LocalDate dfrom;
-	private final LocalDate dto;
+    private final String colNameIn;
+    private final String colNameOut;
+    private final int numDays;
+    private final ValueProvider<LocalDate> dfrom;
+    private final ValueProvider<Long> dfromMillis;
+    private final ValueProvider<LocalDate> dto;
+    private final ValueProvider<Long> dtoMillis;
 
-	public RollingBooleanFeatureFn(String colNameIn, String colNameOut,
-								   int numDays,
-								   LocalDate dfrom, LocalDate dto)
-	{
-		this.colNameIn = colNameIn;
-		this.colNameOut = colNameOut;
-		this.numDays = numDays;
-		this.dfrom = dfrom;
-		this.dto = dto;
-	}
+    public RollingBooleanFeatureFn(String colNameIn, String colNameOut,
+                                   int numDays,
+                                   ValueProvider<LocalDate> dfrom, ValueProvider<LocalDate> dto)
+    {
+        this.colNameIn = colNameIn;
+        this.colNameOut = colNameOut;
+        this.numDays = numDays;
+        this.dfrom = dfrom;
+        this.dfromMillis = NestedValueProvider.of(dfrom, DateUtils::toTimestampAtDayStart);
+        this.dto = dto;
+        this.dtoMillis = NestedValueProvider.of(dto, DateUtils::toTimestampAtDayStart);
+    }
 
-	private class WindowedCreateUserStatsComputedRowFn extends DoFn<Long, UserStatsComputedRow>
-		implements RequiresWindowAccess
-	{
+    private class CreateUserStatsComputedRowFn extends DoFn<KV<Long,Long>, UserStatsComputedRow>
+    {
+        @ProcessElement
+        public void processElement(ProcessContext c)
+            throws Exception
+        {
+            KV<Long,Long> day_userid = c.element();
 
-		@Override
-		public void processElement(ProcessContext c)
-			throws Exception
-		{
-			IntervalWindow w = (IntervalWindow) c.window();
+            UserStatsComputedRow ucrow = new UserStatsComputedRow();
+            ucrow.day = day_userid.getKey();
+            ucrow.auth_user_id = day_userid.getValue();
+            ucrow.setTrue(colNameOut);
 
-			UserStatsComputedRow ucrow = new UserStatsComputedRow();
-			ucrow.day = w.end()
-                .minus(Duration.standardDays(1)) //end() is exclusive
-                //ensure time is 00:00:00
-                .toDateTime(DateTimeZone.UTC).toLocalDate().toDateTimeAtStartOfDay(DateTimeZone.UTC)
-                .getMillis();
-			ucrow.auth_user_id = c.element();
+            c.output(ucrow);
+        }
+    }
 
-			Field fieldOut = UserStatsComputedRow.class.getDeclaredField(colNameOut);
-			fieldOut.setBoolean(ucrow, true);
+    private class RollFn extends DoFn<UserStatsComputedRow, KV<Long,Long>>
+    {
+        @ProcessElement
+        public void processElement(ProcessContext c) {
+            UserStatsComputedRow ucrow = c.element();
 
-			c.output(ucrow);
-		}
-	}
+            //if isTrue() for ucrow.day, then it is true for
+            //next (numDays-1) days in rolling feature
+            for (int i=0; i<numDays; i++) {
+                long day = new Instant(ucrow.day).plus(Duration.standardDays(i)).getMillis();
+
+                //do not generate days before dfrom and after dto
+                if (day<dfromMillis.get() || day>dtoMillis.get())
+                    continue;
+
+                c.output(KV.of(day, ucrow.auth_user_id));
+            }
+        }
+    }
 
     @SuppressWarnings("UnnecessaryLocalVariable")
-	@Override
-    public PCollection<UserStatsComputedRow> apply(PCollection<UserStatsComputedRow> ucrows)
-    	throws IllegalArgumentException
+    @Override
+    public PCollection<UserStatsComputedRow> expand(PCollection<UserStatsComputedRow> ucrows)
+        throws IllegalArgumentException
     {
-        PCollection<Long> uids = ucrows
-	    	//skip ucrows more than numDays before dfrom and after dto, do not have to process them
-    		.apply("FilterDaysIn", Filter.byPredicate(
-                (UserStatsComputedRow ucrow) -> ucrow.dayBetween(dfrom.minusDays(numDays-1), dto)
+        PCollection<KV<Long,Long>> dayUids = ucrows
+            //skip ucrows more than numDays before dfrom and after dto,
+            //or where value is false. we do not have to process them
+            //PCollection<UserStatsComputedRow>  ->  PCollection<UserStatsComputedRow>
+            .apply("FilterDaysIn", Filter.by((UserStatsComputedRow ucrow) ->
+                isBetween(toLocalDate(ucrow.day), dfrom.get().minusDays(numDays-1), dto.get()) &&
+                ucrow.isTrue(colNameIn)
             ))
-    		//filter where ucrow.is_active == true
-    		.apply("FilterIsTrue", Filter.byPredicate((UserStatsComputedRow ucrow) -> {
-				try {
-					Field fieldIn = UserStatsComputedRow.class.getDeclaredField(colNameIn);
-					return (boolean) fieldIn.get(ucrow);
-				} catch (IllegalAccessException|NoSuchFieldException e) {
-					throw new IllegalArgumentException(e);
-				}
-    		}))
-            //optimization. select only user id, day is keept in dataflow's timestamp
-            //PCollection<UserStatsComputedRow>  ->  PCollection<Long>
-            .apply("TakeUserIds", MapElements
-                    .via((UserStatsComputedRow ucrow) -> ucrow.auth_user_id)
-                    .withOutputType(new TypeDescriptor<Long>() {}))
-            //force to materialize PCollection<Long> by using GroupByKey
-            //see https://cloud.google.com/dataflow/service/dataflow-service-desc#fusion-prevention
-            //this fixes java.lang.OutOfMemoryError
-            //http://stackoverflow.com/questions/36793797/
-            .apply("Materialize", new UniqFn<>());
+            //PCollection<UserStatsComputedRow>  ->  PCollection<KV<Long,Long>>
+            //if feature is true, generate userid for (numDays-1) subsequent days
+            .apply("Roll", ParDo.of(new RollFn()));
 
-    	// PCollection<UserStatsComputedRow>  ->  PCollection<UserStatsComputedRow> window
-    	PCollection<Long> uwindow = uids
-    		.apply(Window.named("DailyFixedWindows")
-    			.<Long>into(
-    				SlidingWindows.of(Duration.standardDays(numDays)).
-    				every(Duration.standardDays(1))
-    			)
-    			//.triggering(AfterWatermark.pastEndOfWindow())
-    			.accumulatingFiredPanes());
+        //force to materialize PCollection<Long> by using GroupByKey inside UniqFn
+        //see https://cloud.google.com/dataflow/service/dataflow-service-desc#fusion-prevention
+        //this fixes java.lang.OutOfMemoryError
+        //http://stackoverflow.com/questions/36793797/
 
-    	PCollection<UserStatsComputedRow> ucrowsOut = uwindow
+        PCollection<UserStatsComputedRow> ucrowsOut = dayUids
             //keep each userid only once per each day (i.e. last day of window)
-            //PCollection<Long>  ->  PCollection<Long>
+            //PCollection<KV<Long,Long>>  ->  PCollection<KV<Long,Long>>
             .apply("UniqUserIds", new UniqFn<>())
-    		//PCollection<Long> -> PCollection<UserStatsComputedRow>
-    		.apply("CreateUserStatsRow", ParDo.of(new WindowedCreateUserStatsComputedRowFn()))
-	    	//drop ucrows before dfrom and after dto, have not seen complete input data
-	    	.apply("FilterDaysOut", Filter.byPredicate(
-                (UserStatsComputedRow ucrow) -> ucrow.dayBetween(dfrom, dto))
-            )
-    		.apply("WindowEnd", Window.into(new GlobalWindows()));
+            //PCollection<KV<Long,Long>>  ->  PCollection<UserStatsComputedRow>
+            .apply("CreateUserStatsRow", ParDo.of(new CreateUserStatsComputedRowFn()));
 
-    	return ucrowsOut;
+        return ucrowsOut;
     }
+
 }
