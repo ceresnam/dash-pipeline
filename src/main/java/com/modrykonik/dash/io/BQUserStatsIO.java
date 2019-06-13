@@ -49,6 +49,9 @@ public class BQUserStatsIO {
 
         public String get() {
             if(cachedQuery == null) {
+                // ensure dfrom <= dto
+                assert dto.get().isAfter(dfrom.get()) || dto.get().isEqual(dfrom.get());
+
                 cachedQuery = String.format(
                     "SELECT *" +
                         "    FROM user_stats_%d.ds_daily_user_stats%s" +

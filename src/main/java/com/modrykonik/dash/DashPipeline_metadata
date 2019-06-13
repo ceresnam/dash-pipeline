@@ -1,0 +1,25 @@
+{
+  "name": "DashPipeline",
+  "description": "Dataflow pipeline for computing dash features",
+  "parameters": [{
+    "name": "serverid",
+    "label": "Server ID",
+    "help_text": "Server ID (201 or 202)",
+    "regexes": ["^[0-9]+$"],
+    "is_optional": true
+  },
+  {
+    "name": "dfrom",
+    "label": "Date from",
+    "help_text": "Date from (inclusive) in isoformat, e.g. 2019-06-01",
+    "regexes": ["^[0-9]{4}-[0-9]{2}-[0-9]{2}$"],
+    "is_optional": true
+  },
+  {
+    "name": "dto",
+    "label": "Date to",
+    "help_text": "Date to (inclusive) in isoformat, e.g. 2019-06-02",
+    "regexes": ["^[0-9]{4}-[0-9]{2}-[0-9]{2}$"],
+    "is_optional": true
+  }]
+}
