@@ -30,19 +30,7 @@ import static com.modrykonik.dash.model.DateUtils.isBetween;
 import static com.modrykonik.dash.model.DateUtils.toLocalDate;
 
 /**
- * Goole Cloud Dataflow pipeline for computing dash features
- *
- * build with:
- * 	   export JAVA_HOME=$(/usr/libexec/java_home -v 1.8)
- * 	   export PATH=$PATH:~/Downloads/apache-maven-3.3.9/bin
- *     mvn clean compile assembly:single
- *
- * run in cloud with:
- *     java -jar ./target/dash-pipeline-0.0.1-SNAPSHOT-jar-with-dependencies.jar
- *         --project='maximal-beach-125109' --stagingLocation='gs://dash_import'
- *         --filesToStage=./target/dash-pipeline-0.0.1-SNAPSHOT-jar-with-dependencies.jar
- *         --runner=DataflowPipelineRunner --autoscalingAlgorithm=THROUGHPUT_BASED --maxNumWorkers=5
- *         --serverid=202 --dfrom='2010-01-01' --dto='2010-12-31'
+ * Google Cloud Dataflow pipeline for computing dash features
  */
 public class DashPipeline {
 
