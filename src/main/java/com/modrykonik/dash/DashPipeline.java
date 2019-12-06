@@ -34,6 +34,8 @@ import static com.modrykonik.dash.model.DateUtils.toLocalDate;
  */
 public class DashPipeline {
 
+    private static final int NUM_DAYS_BACK = 28;  // 90
+
     private static String toCamelCase(String s){
         String camelCaseString = "";
 
@@ -68,7 +70,7 @@ public class DashPipeline {
 
         // load from big query
         ValueProvider<LocalDate> dfromPreload = // need to read back in history for rollup features
-            NestedValueProvider.of(dfrom, (LocalDate d) -> d.minusDays(90-1));
+            NestedValueProvider.of(dfrom, (LocalDate d) -> d.minusDays(NUM_DAYS_BACK-1));
         PCollection<TableRow> inputAndPreloadData = pipe
             .apply("BQRead", BQUserStatsIO.Read.from(serverId, dfromPreload, dto));
 
@@ -117,13 +119,13 @@ public class DashPipeline {
             ucrowsResultsList = ucrowsResultsList.and(fucrows28d);
         }
 
-        for (String f: rolling_7_28_90) {
-            String fin = f.equals("has_registered") ? "tmp_" + f : f;
-            String fout = f+"90d";
-            PCollection<UserStatsComputedRow> fucrows7d = ucrowsInputData
-                .apply(toCamelCase(fout), new RollingBooleanFeatureFn(fin, fout, 90, dfrom, dto));
-            ucrowsResultsList = ucrowsResultsList.and(fucrows7d);
-        }
+        // for (String f: rolling_7_28_90) {
+        //    String fin = f.equals("has_registered") ? "tmp_" + f : f;
+        //    String fout = f+"90d";
+        //    PCollection<UserStatsComputedRow> fucrows7d = ucrowsInputData
+        //        .apply(toCamelCase(fout), new RollingBooleanFeatureFn(fin, fout, 90, dfrom, dto));
+        //    ucrowsResultsList = ucrowsResultsList.and(fucrows7d);
+        // }
 
         // merge all features into one ucrow per [day, auth_user_id]
         PCollection<UserStatsComputedRow> ucrowsResults = ucrowsResultsList

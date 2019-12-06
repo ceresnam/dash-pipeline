@@ -36,17 +36,17 @@ public class UserStatsComputedRow {
     @Nullable public boolean is_active;
     @Nullable public boolean is_active7d;
     @Nullable public boolean is_active28d;
-    @Nullable public boolean is_active90d;
+    // @Nullable public boolean is_active90d;
 
     @Nullable public boolean is_alive;
     @Nullable public boolean is_alive7d;
     @Nullable public boolean is_alive28d;
-    @Nullable public boolean is_alive90d;
+    // @Nullable public boolean is_alive90d;
 
     @Nullable public boolean tmp_has_registered; //helper, carrying over data from UserStatsRow
     @Nullable public boolean has_registered7d;
     @Nullable public boolean has_registered28d;
-    @Nullable public boolean has_registered90d;
+    // @Nullable public boolean has_registered90d;
 
     @Nullable public boolean is_bazar_alive;
     @Nullable public boolean is_forum_alive;
