@@ -1,7 +1,8 @@
 #!/bin/bash
 
-export JAVA_HOME=$(/usr/libexec/java_home -v 1.8)
-export PATH=$PATH:~/Downloads/apache-maven-3.6.1/bin
+# osx: export JAVA_HOME=$(/usr/libexec/java_home -v 1.8)
+export JAVA_HOME=$(readlink -f /usr/bin/java | sed "s:bin/java::")
+export PATH=$PATH:~/apache-maven-3.6.3/bin
 
 mvn compile exec:java \
     -Dexec.mainClass=com.modrykonik.dash.DashPipeline \
