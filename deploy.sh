@@ -6,7 +6,8 @@ if [ "$#" -ne 1 ]; then
 fi
 
 # osx: export JAVA_HOME=$(/usr/libexec/java_home -v 1.8)
-export JAVA_HOME=$(readlink -f /usr/bin/java | sed "s:bin/java::")
+# export JAVA_HOME=$(readlink -f /usr/bin/java | sed "s:bin/java::")
+export JAVA_HOME=$(/usr/bin/update-alternatives --list java | grep java-11 | sed "s:bin/java::")
 export PATH=$PATH:~/apache-maven-3.6.3/bin
 
 export GOOGLE_APPLICATION_CREDENTIALS=${1}
@@ -16,6 +17,7 @@ mvn compile exec:java \
     -Dexec.args="\
         --runner=DataflowRunner \
         --project=maximal-beach-125109 \
+        --region=us-central1
         --stagingLocation=gs://dash_pipelines/staging \
         --templateLocation=gs://dash_pipelines/templates/DashPipeline \
     "
